@@ -36,6 +36,25 @@ func main() {
 		"https://www.youtube.com/watch?v=RG3OEWHe1b4",
 		"https://www.youtube.com/watch?v=RlTDbIutJsU",
 		"https://www.youtube.com/watch?v=_8vekzCF04Q",
+		"https://www.youtube.com/watch?v=uHio1uzzTLU",
+		"https://www.youtube.com/watch?v=LjHglFd9_pc",
+		"https://www.youtube.com/watch?v=gUtCfwXgDjI",
+		"https://www.youtube.com/watch?v=GXQYTUdJmmI",
+		"https://www.youtube.com/watch?v=vq5NvJvr55Q",
+		"https://www.youtube.com/watch?v=V7_Ya16YlG8",
+		"https://www.youtube.com/watch?v=NB7mpGQ46Yo",
+		"https://www.youtube.com/watch?v=c5D9FbG71eE",
+		"https://www.youtube.com/watch?v=sM9iSRm97Ws",
+		"https://www.youtube.com/watch?v=qu7Dw4NJmY4",
+		"https://www.youtube.com/watch?v=RygLJ9iToMU",
+		"https://www.youtube.com/watch?v=m4xvqCmcBRU",
+		"https://www.youtube.com/watch?v=hHSdja1L1XE",
+		"https://www.youtube.com/watch?v=ZlL9OieDeoY",
+		"https://www.youtube.com/watch?v=04pDvv3rN0g",
+		"https://www.youtube.com/watch?v=3KadWjpqDXs",
+		"https://www.youtube.com/watch?v=Yy4CZAj0soI",
+		"https://www.youtube.com/watch?v=tz_NxOF7RB4",
+		"https://www.youtube.com/watch?v=2PMnJ_Luk_o",
 	}
 
 	i := 0
@@ -43,14 +62,14 @@ func main() {
 	for {
 		song, err := c.GetSong(ctx, playlist[i])
 		if err != nil {
-			panic(err)
+			tskip(err)
 		}
 
 		buff := make([]byte, 32)
 		for {
 			n, err := song.Read(buff)
 			if err != nil && err != io.EOF {
-				panic(err)
+				tskip(err)
 			}
 			if n == 0 {
 				break

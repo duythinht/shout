@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -20,6 +19,11 @@ import (
 
 type Client struct {
 	*ytdl.Downloader
+}
+
+type Song struct {
+	*os.File
+	Video *youtube.Video
 }
 
 func New(outputDir string) *Client {
@@ -48,7 +52,7 @@ func New(outputDir string) *Client {
 	return &Client{downloader}
 }
 
-func (c *Client) GetSong(ctx context.Context, link string) (io.ReadCloser, error) {
+func (c *Client) GetSong(ctx context.Context, link string) (*Song, error) {
 
 	video, err := c.GetVideo(link)
 
@@ -84,7 +88,15 @@ func (c *Client) GetSong(ctx context.Context, link string) (io.ReadCloser, error
 
 		os.Remove(webm)
 	}
-	return os.Open(mp3)
+	f, err := os.Open(mp3)
+	if err != nil {
+		return nil, fmt.Errorf("open mp3 file %w", err)
+	}
+
+	return &Song{
+		Video: video,
+		File:  f,
+	}, nil
 }
 
 func getAudioWebmFormat(v *youtube.Video) (*youtube.Format, error) {

@@ -52,7 +52,7 @@ func (c *Client) GetSong(ctx context.Context, link string) (io.ReadCloser, error
 
 	video, err := c.GetVideo(link)
 
-	fmt.Printf("Now Playing: %s", video.Title)
+	fmt.Println("Now Playing: ", video.Title)
 
 	if err != nil {
 		return nil, fmt.Errorf("get video info %w", err)

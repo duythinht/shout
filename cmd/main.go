@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"time"
 	"webiu/radio/shout"
@@ -31,24 +30,45 @@ func main() {
 	defer w.Close()
 	time.Sleep(10 * time.Second)
 
-	m1, _ := c.GetSong(ctx, "https://www.youtube.com/watch?v=RzNbppUhS0A")
-	io.Copy(w, m1)
-	m1.Close()
-	fmt.Println("done 1")
-	time.Sleep(10 * time.Second)
+	playlist := []string{
+		"https://www.youtube.com/watch?v=CgNVotVutx0",
+		"https://www.youtube.com/watch?v=6Q0Pd53mojY",
+		"https://www.youtube.com/watch?v=RG3OEWHe1b4",
+		"https://www.youtube.com/watch?v=RlTDbIutJsU",
+		"https://www.youtube.com/watch?v=_8vekzCF04Q",
+	}
 
-	m2, _ := c.GetSong(ctx, "https://www.youtube.com/watch?v=Zq8Cy8tQr8A")
-	io.Copy(w, m2)
-	m2.Close()
-	fmt.Println("done 2")
-	time.Sleep(10 * time.Second)
+	i := 0
 
-	m3, _ := c.GetSong(ctx, "https://www.youtube.com/watch?v=Zq8Cy8tQr8A")
-	io.Copy(w, m3)
-	m3.Close()
-	fmt.Println("done 3")
+	for {
+		song, err := c.GetSong(ctx, playlist[i])
+		if err != nil {
+			panic(err)
+		}
 
-	time.Sleep(1 * time.Minute)
+		buff := make([]byte, 32)
+		for {
+			n, err := song.Read(buff)
+			if err != nil && err != io.EOF {
+				panic(err)
+			}
+			if n == 0 {
+				break
+			}
+
+			_, err = w.Write(buff)
+			if err != nil {
+				panic(err)
+			}
+		}
+
+		//io.Copy(w, song)
+		go func(io.ReadCloser) {
+			time.Sleep(10 * time.Second)
+			song.Close()
+		}(song)
+		i = (i + 1) % len(playlist)
+	}
 }
 
 func tskip(err error) {

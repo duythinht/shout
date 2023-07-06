@@ -31,6 +31,7 @@ func (s *Shout) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Connection", "Keep-Alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Transfer-Encoding", "chunked")
 	w.Header().Set("Content-Type", "audio/mpeg")

@@ -19,6 +19,12 @@ import (
 func main() {
 	ctx := context.Background()
 	token := os.Getenv("SLACK_TOKEN")
+	address := os.Getenv("SERVER_ADDRESS")
+
+	if address == "" {
+		address = "0.0.0.0:8000"
+	}
+
 	channelID := "C0UQ8TKLJ"
 
 	s := station.New(token, channelID)
@@ -36,8 +42,9 @@ func main() {
 	defer w.Close()
 
 	go func() {
-		slog.Info("Starting server at 0.0.0.0:8000")
-		http.ListenAndServe("0.0.0.0:8000", w)
+		slog.Info("Starting server", slog.String("address", address))
+		err := http.ListenAndServe(address, w)
+		qcheck(err)
 	}()
 
 	for {

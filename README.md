@@ -1,4 +1,4 @@
-## Radio Server for Wibiu
+## Radio Server for Wibu
 
 ### Prerequisite
 

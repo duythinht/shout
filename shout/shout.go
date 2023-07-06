@@ -58,7 +58,11 @@ func (s *Shout) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		data, duration := s.Playback()
-		w.Write(data)
+		_, err := w.Write(data)
+		if err != nil {
+			slog.Warn("Client disconnected", slog.String("ip", ip), slog.String("path", r.URL.Path))
+			return
+		}
 		seg = bSeg
 		time.Sleep(duration)
 	}

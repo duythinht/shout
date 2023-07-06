@@ -45,7 +45,9 @@ func main() {
 		link := playlist.Shuffle()
 		song, err := c.GetSong(ctx, link)
 
-		qcheck(err)
+		if !errors.Is(err, utube.ErrSongTooLong) {
+			qcheck(err)
+		}
 
 		title := song.Video.Title
 

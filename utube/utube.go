@@ -21,6 +21,10 @@ import (
 	"golang.org/x/net/http/httpproxy"
 )
 
+var (
+	ErrSongTooLong = errors.New("video too long, assume this a troll")
+)
+
 type Client struct {
 	*youtube.Client
 	dir string
@@ -62,6 +66,10 @@ func (c *Client) GetSong(ctx context.Context, link string) (*Song, error) {
 
 	if err != nil {
 		return nil, fmt.Errorf("get video info %w", err)
+	}
+
+	if video.Duration > 13*time.Minute {
+		return nil, fmt.Errorf("%s %w", link, ErrSongTooLong)
 	}
 
 	mp3 := filepath.Join(c.dir, fmt.Sprintf("%s.mp3", video.ID))

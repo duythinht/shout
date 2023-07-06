@@ -14,4 +14,4 @@ go run cmd/music-station/main.go
 
 ### Known issues
 
-* So much, but I don't known :)
+* So much, but I don't know :)

@@ -1,4 +1,4 @@
-module webiu/radio
+module github.com/duythinht/shout
 
 go 1.20
 
@@ -13,6 +13,7 @@ require (
 	github.com/acarl005/stripansi v0.0.0-20180116102854-5a71ef0e047d // indirect
 	github.com/bitly/go-simplejson v0.5.0 // indirect
 	github.com/dlclark/regexp2 v1.9.0 // indirect
+	github.com/dmulholl/mp3lib v1.0.0
 	github.com/dop251/goja v0.0.0-20230402114112-623f9dda9079 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/google/pprof v0.0.0-20230406165453-00490a63f317 // indirect

@@ -4,7 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"webiu/radio/station"
+
+	"github.com/duythinht/shout/station"
 
 	"github.com/slack-go/slack"
 )

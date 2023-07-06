@@ -10,7 +10,11 @@ import (
 )
 
 var (
-	rx                = regexp.MustCompile(`https://(.+.youtube.com|youtu.be)/(watch\?v=([^&^>^|]+)|([^&^>^|]+))`)
+	rx = regexp.MustCompile(`https://(.+.youtube.com|youtu.be)/(watch\?v=([^&^>^|]+)|([^&^>^|]+))`)
+
+	//hardcode stream link, move to config later
+	streamLink = "https://radio.0x97a.com/stream.mp3"
+
 	ErrNotYoutubeLink = errors.New("not a youtube link")
 )
 
@@ -97,8 +101,6 @@ func (s Station) History(ctx context.Context) (playlist *Playlist, err error) {
 
 func (s *Station) NowPlaying() (func(string) error, error) {
 	bookmarks, err := s.ListBookmarks(s.channelID)
-
-	streamLink := "https://radio.0x97a.com/stream.mp3"
 
 	if err != nil {
 		panic(err)

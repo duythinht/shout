@@ -2,7 +2,8 @@ package station_test
 
 import (
 	"testing"
-	"webiu/radio/station"
+
+	"github.com/duythinht/shout/station"
 )
 
 func TestPlaylistAddAndRemove(t *testing.T) {

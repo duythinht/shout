@@ -4,21 +4,26 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"mime"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
-	"webiu/radio/ffmpeg"
+
+	"github.com/duythinht/shout/ffmpeg"
 
 	"github.com/kkdai/youtube/v2"
-	ytdl "github.com/kkdai/youtube/v2/downloader"
+	"golang.org/x/exp/slog"
 	"golang.org/x/net/http/httpproxy"
 )
 
 type Client struct {
-	*ytdl.Downloader
+	*youtube.Client
+	dir string
 }
 
 type Song struct {
@@ -26,7 +31,7 @@ type Song struct {
 	Video *youtube.Video
 }
 
-func New(outputDir string) *Client {
+func New(songDirectory string) *Client {
 	proxyFunc := httpproxy.FromEnvironment().ProxyFunc()
 	httpTransport := &http.Transport{
 		// Proxy: http.ProxyFromEnvironment() does not work. Why?
@@ -43,29 +48,25 @@ func New(outputDir string) *Client {
 		}).DialContext,
 	}
 
-	downloader := &ytdl.Downloader{
-		OutputDir: outputDir,
+	return &Client{
+		Client: &youtube.Client{
+			HTTPClient: &http.Client{Transport: httpTransport},
+		},
+		dir: songDirectory,
 	}
-	downloader.Client.Debug = false
-	downloader.HTTPClient = &http.Client{Transport: httpTransport}
-
-	return &Client{downloader}
 }
 
 func (c *Client) GetSong(ctx context.Context, link string) (*Song, error) {
 
 	video, err := c.GetVideo(link)
 
-	fmt.Println("Now Playing: ", video.Title)
-
 	if err != nil {
 		return nil, fmt.Errorf("get video info %w", err)
 	}
 
-	webm := fmt.Sprintf("%s/%s.webm", c.OutputDir, video.ID)
-	mp3 := fmt.Sprintf("%s/%s.mp3", c.OutputDir, video.ID)
+	mp3 := filepath.Join(c.dir, fmt.Sprintf("%s.mp3", video.ID))
 
-	_, err = os.Stat(c.OutputDir + mp3)
+	_, err = os.Stat(mp3)
 
 	if errors.Is(err, os.ErrNotExist) {
 
@@ -75,19 +76,45 @@ func (c *Client) GetSong(ctx context.Context, link string) (*Song, error) {
 			return nil, fmt.Errorf("get video info %w", err)
 		}
 
-		err = c.Download(ctx, video, fm, video.ID+".webm")
+		origin := filepath.Join(c.dir, fmt.Sprintf("%s.%s", video.ID, pickIdealFileExtension(fm.MimeType)))
+
+		stream, _, err := c.GetStream(video, fm)
+
 		if err != nil {
-			return nil, fmt.Errorf("download %w", err)
+			return nil, fmt.Errorf("download - get stream - %w", err)
 		}
 
-		ffmpeg.ToMP3(
+		f, err := os.Create(origin)
+
+		if err != nil {
+			return nil, fmt.Errorf("download - create origin - %w", err)
+		}
+
+		_, err = io.Copy(f, stream)
+
+		if err != nil {
+			return nil, fmt.Errorf("download - io.Copy - %w", err)
+		}
+
+		slog.Info("Fetch Song From youtube", slog.String("origin", origin), slog.String("mp3", mp3))
+
+		err = ffmpeg.ToMP3(
 			ctx,
-			webm,
+			origin,
 			mp3,
 		)
 
-		os.Remove(webm)
+		if err != nil {
+			return nil, fmt.Errorf("ffmpeg - %w", err)
+		}
+
+		err = os.Remove(origin)
+
+		if err != nil {
+			return nil, fmt.Errorf("remove origin - %w", err)
+		}
 	}
+
 	f, err := os.Open(mp3)
 	if err != nil {
 		return nil, fmt.Errorf("open mp3 file %w", err)
@@ -111,4 +138,37 @@ func getAudioWebmFormat(v *youtube.Video) (*youtube.Format, error) {
 	}
 	// no webm, take first format
 	return &formats[0], nil
+}
+
+var canonicals = map[string]string{
+	"video/quicktime":  ".mov",
+	"video/x-msvideo":  ".avi",
+	"video/x-matroska": ".mkv",
+	"video/mpeg":       ".mpeg",
+	"video/webm":       ".webm",
+	"video/3gpp2":      ".3g2",
+	"video/x-flv":      ".flv",
+	"video/3gpp":       ".3gp",
+	"video/mp4":        ".mp4",
+	"video/ogg":        ".ogv",
+	"video/mp2t":       ".ts",
+}
+
+func pickIdealFileExtension(mediaType string) string {
+	mediaType, _, err := mime.ParseMediaType(mediaType)
+	if err != nil {
+		return "webm"
+	}
+
+	if extension, ok := canonicals[mediaType]; ok {
+		return extension
+	}
+
+	// Our last resort is to ask the operating system, but these give multiple results and are rarely canonical.
+	extensions, err := mime.ExtensionsByType(mediaType)
+	if err != nil || extensions == nil {
+		return "webm"
+	}
+
+	return extensions[0]
 }

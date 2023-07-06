@@ -1,229 +1,200 @@
 package shout
 
-/*
-#cgo LDFLAGS: -lshout
-#include <stdlib.h>
-#include <shout/shout.h>
-*/
-import "C"
 import (
-	"fmt"
-	"runtime"
-	"unsafe"
+	"io"
+	"net/http"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/dmulholl/mp3lib"
+	"golang.org/x/exp/slog"
 )
 
-func init() {
-	C.shout_init()
-}
-
-// ShutDown shuts down the shout library, deallocating any global storage. Don't call
-// anything afterwards
-func ShutDown() {
-	C.shout_shutdown()
-}
-
-// Version represents the libshout version struct
-type Version struct {
-	Version string
-	Major   int
-	Minor   int
-	Patch   int
-}
-
-// Error is an libshout integer error type
-type Error int
-
-// Error constants
 const (
-	ShoutErrorSuccess     Error = 0
-	ShoutErrorInsane      Error = -1
-	ShoutErrorNoConnect   Error = -2
-	ShoutErrorNoLogin     Error = -3
-	ShoutErrorSocket      Error = -4
-	ShoutErrorMalloc      Error = -5
-	ShoutErrorMetadata    Error = -6
-	ShoutErrorConnected   Error = -7
-	ShoutErrorUnconnected Error = -8
-	ShoutErrorUnsupported Error = -9
-	ShoutErrorBusy        Error = -10
-	ShoutErrorNoTLS       Error = -11
-	ShoutErrorTLSBadCert  Error = -12
-	ShoutErrorRetry       Error = -13
+	InitFrameCount = 1000
+	FrameCount     = 100
 )
 
-func (e Error) Error() string {
-	switch e {
-	case ShoutErrorSuccess:
-		return "success"
-	case ShoutErrorInsane:
-		return "insane error"
-	case ShoutErrorNoConnect:
-		return "connect error"
-	case ShoutErrorNoLogin:
-		return "login error"
-	case ShoutErrorSocket:
-		return "socket error"
-	case ShoutErrorMalloc:
-		return "memory allocation error"
-	case ShoutErrorMetadata:
-		return "metadata error"
-	case ShoutErrorConnected:
-		return "connected"
-	case ShoutErrorUnconnected:
-		return "not connected"
-	case ShoutErrorUnsupported:
-		return "not supported"
-	case ShoutErrorBusy:
-		return "non-blocking io busy"
-	case ShoutErrorNoTLS:
-		return "no tls error"
-	case ShoutErrorTLSBadCert:
-		return "bad certificate"
-	case ShoutErrorRetry:
-		return "retry"
-	default:
-		return fmt.Sprintf("unknown error code %d", e)
+type Shout struct {
+	buffer *Buffer //buffer, for reserve data
+
+	initialed bool
+}
+
+func New() *Shout {
+	return &Shout{
+		buffer: buffer(),
 	}
 }
 
-// GetVersion returns libshout version
-func GetVersion() *Version {
-	var major, minor, patch C.int
-	csv := C.shout_version(
-		&major,
-		&minor,
-		&patch,
+func (s *Shout) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+
+	slog.Info("Client connected", slog.String("ip", getRealIP(r)))
+
+	w.Header().Set("Connection", "Keep-Alive")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Transfer-Encoding", "chunked")
+	w.Header().Set("Content-Type", "audio/mpeg")
+
+	init := true
+	seg := 0
+
+	for {
+		if seg == s.buffer.Segment() {
+			time.Sleep(time.Millisecond * 100)
+			continue
+		}
+		if !init {
+			data, t := s.buffer.Initialization()
+			w.Write(data)
+			time.Sleep(time.Millisecond * t)
+			continue
+		}
+		data, t := s.buffer.Playback()
+		w.Write(data)
+		time.Sleep(time.Millisecond * t)
+	}
+}
+
+func (s *Shout) Stream(r io.ReadCloser) error {
+	if !s.initialed {
+		slog.Info("Initialize Stream for the first time")
+		s.initial(r)
+	}
+	for {
+		if err := s.playback(r); err != nil {
+			return err
+		}
+	}
+}
+
+func (s *Shout) initial(r io.ReadCloser) error {
+
+	var (
+		idata []byte
+		data  []byte
 	)
 
-	result := &Version{
-		Version: C.GoString(csv),
-		Major:   int(major),
-		Minor:   int(minor),
-		Patch:   int(patch),
+	eof := false
+	t := 0
+
+	for i := 0; i < InitFrameCount; i++ {
+		frame := mp3lib.NextFrame(r)
+		if frame == nil {
+			eof = true
+			continue
+		}
+
+		idata = append(idata, frame.RawBytes...)
+
+		if i >= InitFrameCount-FrameCount {
+			data = append(data, frame.RawBytes...)
+			t += 1000 * frame.SampleCount / frame.SamplingRate
+		}
 	}
 
-	return result
-}
+	s.buffer.WriteInitilize(idata)
 
-// StreamFormat type represents a stream format
-type StreamFormat int
+	s.buffer.Write(data, time.Duration(t))
 
-// Format constants
-const (
-	ShoutFormatOGG       StreamFormat = 0
-	ShoutFormatVorbis    StreamFormat = 0
-	ShoutFormatMP3       StreamFormat = 1
-	ShoutFormatWEBM      StreamFormat = 2
-	ShoutFormatWEBMAudio StreamFormat = 3
-)
-
-// Protocol type represents a stream protocol type
-type Protocol int
-
-// Protocol constants
-const (
-	ProtocolHTTP       Protocol = 0
-	ProtocolXAudioCast Protocol = 1
-	ProtocolICY        Protocol = 2
-	ProtocolRoarAudio  Protocol = 3
-)
-
-func convError(errCode int) error {
-	if errCode == int(ShoutErrorSuccess) {
-		return nil
-	}
-	return Error(errCode)
-}
-
-// Config is a shout configuration struct
-type Config struct {
-	Host     string
-	Port     uint16
-	User     string
-	Password string
-	Mount    string
-	Proto    Protocol
-	Format   StreamFormat
-}
-
-// Writer represents a Writer interface to libshout streaming structure
-type Writer struct {
-	cshout *C.struct_shout
-}
-
-// Connect creates a connection according to configuration and returns
-// a Writer instance
-func Connect(cfg *Config) (*Writer, error) {
-	var cstr *C.char
-	shout := C.shout_new()
-	if shout == nil {
-		return nil, fmt.Errorf("error allocating shout_t structure")
+	if eof {
+		return io.EOF
 	}
 
-	// setting hostname
-	cstr = C.CString(cfg.Host)
-	C.shout_set_host(shout, cstr)
-	C.free(unsafe.Pointer(cstr))
+	s.initialed = true
 
-	// setting port
-	C.shout_set_port(shout, C.ushort(cfg.Port))
+	return nil
+}
 
-	// setting source user
-	cstr = C.CString(cfg.User)
-	C.shout_set_user(shout, cstr)
-	C.free(unsafe.Pointer(cstr))
+func (s *Shout) playback(r io.ReadCloser) error {
+	var data []byte
+	t := 0
+	eof := false
 
-	// setting source password
-	cstr = C.CString(cfg.Password)
-	C.shout_set_password(shout, cstr)
-	C.free(unsafe.Pointer(cstr))
+	// each playback stream 50 frame
+	for i := 0; i < FrameCount; i++ {
+		frame := mp3lib.NextFrame(r)
+		if frame == nil {
+			eof = true
+			continue
+		}
 
-	// setting mountpoint
-	cstr = C.CString(cfg.Mount)
-	C.shout_set_mount(shout, cstr)
-	C.free(unsafe.Pointer(cstr))
+		data = append(data, frame.RawBytes...)
+		t += 1000 * frame.SampleCount / frame.SamplingRate
+	}
+	s.buffer.Write(data, time.Duration(t))
+	time.Sleep(time.Duration(t) * time.Millisecond)
+	if eof {
+		return io.EOF
+	}
+	return nil
+}
 
-	// setting stream format
-	C.shout_set_content_format(shout, C.uint(cfg.Format), C.uint(1), nil)
+func (s *Shout) Close() error {
+	return nil
+}
 
-	// setting stream protocol
-	C.shout_set_protocol(shout, C.uint(cfg.Proto))
+type Buffer struct {
+	*sync.RWMutex
 
-	res := int(C.shout_open(shout))
-	if res != int(ShoutErrorSuccess) {
-		C.shout_free(shout)
-		err := convError(res)
-		return nil, err
+	playback []byte
+	initial  []byte
+	seg      int
+	t        time.Duration // current playback duration
+}
+
+func buffer() *Buffer {
+	return &Buffer{
+		RWMutex: &sync.RWMutex{},
+	}
+}
+
+func (b *Buffer) WriteInitilize(data []byte) {
+	b.Lock()
+	defer b.Unlock()
+	b.initial = data[:]
+}
+
+func (b *Buffer) Write(data []byte, t time.Duration) {
+	b.Lock()
+	defer b.Unlock()
+
+	initial := b.initial[:]
+	initial = initial[len(data):]
+	initial = append(initial, data...)
+	b.initial = initial
+	b.playback = data[:]
+	b.seg++
+	b.t = t
+}
+
+func (b *Buffer) Playback() ([]byte, time.Duration) {
+	b.RLock()
+	defer b.RUnlock()
+	return b.playback[:], b.t
+}
+
+func (b *Buffer) Initialization() ([]byte, time.Duration) {
+	b.RLock()
+	defer b.RUnlock()
+	return b.initial[:], b.t
+}
+
+func (b *Buffer) Segment() int {
+	b.RLock()
+	defer b.RUnlock()
+	return b.seg
+}
+
+func getRealIP(r *http.Request) string {
+	xfwd4 := r.Header.Get("X-Forwarded-For")
+
+	if xfwd4 == "" {
+		return strings.Split(r.RemoteAddr, ":")[0]
 	}
 
-	w := &Writer{cshout: shout}
-	runtime.SetFinalizer(w, finalize)
-	return w, nil
-}
-
-func (w *Writer) Write(p []byte) (n int, err error) {
-	pptr := (*C.uchar)(&p[0])
-	bufSize := C.size_t(len(p))
-	res := int(C.shout_send(w.cshout, pptr, bufSize))
-	err = convError(res)
-	if err == nil {
-		n = len(p)
-		C.shout_sync(w.cshout)
-	}
-	return
-}
-
-// Close closes a shout connection
-func (w *Writer) Close() error {
-	fmt.Println("shout closed")
-	res := int(C.shout_close(w.cshout))
-	return convError(res)
-}
-
-func (w *Writer) getErrno() int {
-	return int(C.shout_get_errno(w.cshout))
-}
-
-func finalize(w *Writer) {
-	C.shout_free(w.cshout)
+	ips := strings.Split(xfwd4, ", ")
+	return ips[len(ips)-1]
 }

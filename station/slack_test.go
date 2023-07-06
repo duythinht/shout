@@ -3,7 +3,8 @@ package station_test
 import (
 	"errors"
 	"testing"
-	"webiu/radio/station"
+
+	"github.com/duythinht/shout/station"
 )
 
 func TestExtractVideoFromMessage(t *testing.T) {

@@ -29,6 +29,8 @@ func NewPlaylist() *Playlist {
 }
 
 func (p *Playlist) Add(link string) {
+	p.lock.Lock()
+	defer p.lock.Unlock()
 
 	if _, ok := p.m[link]; ok {
 		return
@@ -39,6 +41,10 @@ func (p *Playlist) Add(link string) {
 }
 
 func (p *Playlist) Delete(link string) {
+
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
 	if _, ok := p.m[link]; !ok {
 		return
 	}
@@ -51,16 +57,26 @@ func (p *Playlist) Delete(link string) {
 }
 
 func (p *Playlist) Has(link string) bool {
+
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
 	_, ok := p.m[link]
 	return ok
 }
 
 func (p *Playlist) Size() int {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
 	return len(p.links)
 }
 
 // Poll return the fist link, if len == 0 return ""
 func (p *Playlist) Poll() (link string) {
+
+	p.lock.Lock()
+	defer p.lock.Unlock()
+
 	lenght := len(p.links)
 
 	if lenght == 0 {
@@ -77,6 +93,10 @@ func (p *Playlist) Poll() (link string) {
 }
 
 func (p *Playlist) Shuffle() (link string) {
+
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
 	i := rand.Intn(len(p.links))
 	return p.links[i]
 }

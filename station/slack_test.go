@@ -23,10 +23,10 @@ func TestExtractVideoFromMessage(t *testing.T) {
 		t.Fail()
 	}
 
-	id3, _ := station.ExtractYoutubeID("https://www.youtube.com/abc")
+	id3, err := station.ExtractYoutubeID("https://www.youtube.com/abc")
 
 	if !errors.Is(err, station.ErrNotYoutubeLink) {
-		t.Logf("Err %s - %s", id3, err)
+		t.Logf("Err %s - %s", id3, err.Error())
 		t.Fail()
 	}
 }

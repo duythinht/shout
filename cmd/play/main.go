@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
-	"github.com/slack-go/slack"
+	"github.com/duythinht/shout/station"
 )
 
 func main() {
@@ -13,34 +14,22 @@ func main() {
 	token := os.Getenv("SLACK_TOKEN")
 	ctx := context.Background()
 
-	api := slack.New(token)
 	channelID := "C0UQ8TKLJ"
 
-	history, err := api.GetConversationHistoryContext(ctx, &slack.GetConversationHistoryParameters{
-		ChannelID: channelID,
-		Limit:     2,
-	})
+	s := station.New(token, channelID)
+
+	queue, err := s.Watch(ctx)
 
 	if err != nil {
 		panic(err)
 	}
 
-	latest := history.Messages[1].Timestamp
+	for {
+		if queue.Size() > 0 {
+			link := queue.Poll()
+			fmt.Println(link)
+		}
 
-	fmt.Printf("latest %s\n", latest)
-
-	history, err = api.GetConversationHistoryContext(ctx, &slack.GetConversationHistoryParameters{
-		ChannelID: channelID,
-		Oldest:    latest,
-	})
-
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Printf("latest %s\n", history.Messages[0].Timestamp)
-
-	for _, m := range history.Messages {
-		fmt.Printf("> %s\n", m.Text)
+		time.Sleep(1 * time.Second)
 	}
 }

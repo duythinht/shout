@@ -28,7 +28,11 @@ func main() {
 	channelID := "C0UQ8TKLJ"
 
 	s := station.New(token, channelID)
+
 	playlist, err := s.History(ctx)
+	qcheck(err)
+
+	queue, err := s.Watch(ctx)
 	qcheck(err)
 
 	setTitle, err := s.NowPlaying()
@@ -49,14 +53,23 @@ func main() {
 
 	for {
 
-		link := playlist.Shuffle()
+		var link string
+
+		if queue.Size() > 0 {
+			// Get the link from queue, and then add it back to playlist for play later (when queue is empty)
+			link = queue.Poll()
+			playlist.Add(link)
+		} else {
+			// play suffle if don't have any music in queue
+			link = playlist.Shuffle()
+		}
+
 		song, err := c.GetSong(ctx, link)
 
 		if err != nil {
-			if errors.Is(err, utube.ErrSongTooLong) {
-				continue
-			}
-			qcheck(err)
+			// skip this song if get some error
+			slog.Warn("get song", slog.String("error", err.Error()))
+			continue
 		}
 
 		title := song.Video.Title

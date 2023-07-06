@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"time"
 
 	"github.com/slack-go/slack"
+	"golang.org/x/exp/slog"
 )
 
 var (
@@ -136,4 +138,66 @@ func (s *Station) NowPlaying() (func(string) error, error) {
 		})
 		return err
 	}, nil
+}
+
+func (s *Station) Watch(ctx context.Context) (playlist *Playlist, err error) {
+	playlist = NewPlaylist()
+
+	last, err := s.GetConversationHistoryContext(ctx, &slack.GetConversationHistoryParameters{
+		ChannelID: s.channelID,
+		Limit:     1,
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("watch - last history %w", err)
+	}
+
+	go func() {
+		ts := last.Messages[0].Timestamp
+		for {
+
+			time.Sleep(30 * time.Second)
+
+			last, err := s.GetConversationHistoryContext(ctx, &slack.GetConversationHistoryParameters{
+				ChannelID: s.channelID,
+				Oldest:    ts,
+			})
+
+			if err != nil {
+				slog.Warn("watch", slog.String("error", err.Error()))
+				continue
+			}
+
+			count := len(last.Messages)
+
+			if count < 1 {
+				continue
+			}
+
+			for i := 0; i < count; i++ {
+				text := last.Messages[count-i-1].Text
+				id, err := ExtractYoutubeID(text)
+				if err != nil {
+					if errors.Is(err, ErrNotYoutubeLink) {
+						continue
+					}
+					slog.Warn("watch", slog.String("error", err.Error()))
+					continue
+				}
+
+				link := fmt.Sprintf(
+					"https://www.youtube.com/watch?v=%s",
+					id,
+				)
+
+				slog.Info("Queue added", slog.String("link", link))
+
+				playlist.Add(link)
+			}
+
+			ts = last.Messages[0].Timestamp
+		}
+	}()
+
+	return playlist, nil
 }

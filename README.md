@@ -3,7 +3,7 @@
 ### Prerequisite
 
 * Golang 1.20++
-* ffmpeg: Brew install ffmpeg
+* ffmpeg: `brew install ffmpeg`
 * A Slack token that associcated with slack app that have permission to read channel history, listing/write bookmarks
 
 ### Easy to start

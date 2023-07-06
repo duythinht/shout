@@ -2,21 +2,19 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"github.com/slack-go/slack"
 	"os"
-	"regexp"
 	"webiu/radio/station"
+
+	"github.com/slack-go/slack"
 )
 
 func main() {
-	api := slack.New(os.Getenv("SLACK_TOKEN"))
+
+	token := os.Getenv("SLACK_TOKEN")
 	ctx := context.Background()
 
-	rx := regexp.MustCompile("https://(.+.youtube.com|youtu.be)/(watch\\?v=(\\w+)|(\\w+))")
-	_ = rx
-
+	api := slack.New(token)
 	channelID := "C0UQ8TKLJ"
 
 	bookmarks, err := api.ListBookmarks(channelID)
@@ -30,19 +28,12 @@ func main() {
 		fmt.Printf("Title: %s\nId: %s\n", bookmark.Title, bookmark.AppID)
 	}
 
-	resp, err := api.GetConversationHistoryContext(ctx, &slack.GetConversationHistoryParameters{
-		ChannelID: channelID,
-	})
-
-	for _, m := range resp.Messages {
-
-		id, err := station.ExtractYoutubeID(m.Text)
-		if err != nil {
-			if errors.Is(err, station.ErrNotYoutubeLink) {
-				continue
-			}
-			panic(err)
-		}
-		fmt.Printf("https://www.youtube.com/watch?v=%s\n", id)
+	s := station.New(token, channelID)
+	play, err := s.History(ctx)
+	if err != nil {
+		panic(err)
+	}
+	for play.Size() > 0 {
+		fmt.Printf("link: %s\n", play.Poll())
 	}
 }

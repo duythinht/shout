@@ -1,12 +1,13 @@
-package station
+package station_test
 
 import (
 	"errors"
 	"testing"
+	"webiu/radio/station"
 )
 
 func TestExtractVideoFromMessage(t *testing.T) {
-	id1, err := ExtractYoutubeID("https://m.youtube.com/watch?v=c5D9FbG71eE&amp;t=144s|https://m.youtube.com/watch?v=c5D9FbG71eE")
+	id1, err := station.ExtractYoutubeID("https://m.youtube.com/watch?v=c5D9FbG71eE&amp;t=144s|https://m.youtube.com/watch?v=c5D9FbG71eE")
 
 	if err != nil {
 		t.Fatal(err)
@@ -16,14 +17,14 @@ func TestExtractVideoFromMessage(t *testing.T) {
 		t.Fail()
 	}
 
-	id2, err := ExtractYoutubeID("https://www.youtube.com/watch?v=Yy4CZAj0soI")
+	id2, _ := station.ExtractYoutubeID("https://www.youtube.com/watch?v=Yy4CZAj0soI")
 	if id2 != "Yy4CZAj0soI" {
 		t.Fail()
 	}
 
-	id3, err := ExtractYoutubeID("https://www.youtube.com/abc")
+	id3, _ := station.ExtractYoutubeID("https://www.youtube.com/abc")
 
-	if !errors.Is(err, ErrNotYoutubeLink) {
+	if !errors.Is(err, station.ErrNotYoutubeLink) {
 		t.Logf("Err %s - %s", id3, err)
 		t.Fail()
 	}

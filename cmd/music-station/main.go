@@ -2,15 +2,29 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"os"
 	"time"
 	"webiu/radio/shout"
+	"webiu/radio/station"
 	"webiu/radio/utube"
 )
 
 func main() {
 
 	ctx := context.Background()
+
+	token := os.Getenv("SLACK_TOKEN")
+	channelID := "C0UQ8TKLJ"
+
+	s := station.New(token, channelID)
+	playlist, err := s.History(ctx)
+	tskip(err)
+
+	setNowPlaying, err := s.NowPlaying()
+
+	tskip(err)
 
 	cfg := &shout.Config{
 		Host:     "localhost",
@@ -30,43 +44,23 @@ func main() {
 	defer w.Close()
 	time.Sleep(10 * time.Second)
 
-	playlist := []string{
-		"https://www.youtube.com/watch?v=CgNVotVutx0",
-		"https://www.youtube.com/watch?v=6Q0Pd53mojY",
-		"https://www.youtube.com/watch?v=RG3OEWHe1b4",
-		"https://www.youtube.com/watch?v=RlTDbIutJsU",
-		"https://www.youtube.com/watch?v=_8vekzCF04Q",
-		"https://www.youtube.com/watch?v=uHio1uzzTLU",
-		"https://www.youtube.com/watch?v=LjHglFd9_pc",
-		"https://www.youtube.com/watch?v=gUtCfwXgDjI",
-		"https://www.youtube.com/watch?v=GXQYTUdJmmI",
-		"https://www.youtube.com/watch?v=vq5NvJvr55Q",
-		"https://www.youtube.com/watch?v=V7_Ya16YlG8",
-		"https://www.youtube.com/watch?v=NB7mpGQ46Yo",
-		"https://www.youtube.com/watch?v=c5D9FbG71eE",
-		"https://www.youtube.com/watch?v=sM9iSRm97Ws",
-		"https://www.youtube.com/watch?v=qu7Dw4NJmY4",
-		"https://www.youtube.com/watch?v=RygLJ9iToMU",
-		"https://www.youtube.com/watch?v=m4xvqCmcBRU",
-		"https://www.youtube.com/watch?v=hHSdja1L1XE",
-		"https://www.youtube.com/watch?v=ZlL9OieDeoY",
-		"https://www.youtube.com/watch?v=04pDvv3rN0g",
-		"https://www.youtube.com/watch?v=3KadWjpqDXs",
-		"https://www.youtube.com/watch?v=Yy4CZAj0soI",
-		"https://www.youtube.com/watch?v=tz_NxOF7RB4",
-		"https://www.youtube.com/watch?v=2PMnJ_Luk_o",
-	}
-
-	i := 0
-
 	for {
-		song, err := c.GetSong(ctx, playlist[i])
+
+		link := playlist.Shuffle()
+		song, err := c.GetSong(ctx, link)
+
 		if err != nil {
 			tskip(err)
 		}
 
-		buff := make([]byte, 32)
+		err = setNowPlaying(song.Video.Title)
+		fmt.Printf("Now Playing: %s\n", link)
+
+		tskip(err)
+
+		buff := make([]byte, 1024)
 		for {
+
 			n, err := song.Read(buff)
 			if err != nil && err != io.EOF {
 				tskip(err)
@@ -86,7 +80,7 @@ func main() {
 			time.Sleep(10 * time.Second)
 			song.Close()
 		}(song)
-		i = (i + 1) % len(playlist)
+
 	}
 }
 

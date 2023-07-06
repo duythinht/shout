@@ -42,8 +42,9 @@ func (s *Shout) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	seg := 0
 
 	for {
-		if seg == s.buffer.Segment() {
-			time.Sleep(time.Millisecond * 100)
+		bSeg := s.buffer.Segment()
+		if seg == bSeg {
+			time.Sleep(time.Millisecond * 200)
 			continue
 		}
 		if !init {
@@ -54,6 +55,7 @@ func (s *Shout) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 		data, t := s.buffer.Playback()
 		w.Write(data)
+		seg = bSeg
 		time.Sleep(time.Millisecond * t)
 	}
 }

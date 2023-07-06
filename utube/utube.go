@@ -69,7 +69,7 @@ func (c *Client) GetSong(ctx context.Context, link string) (*Song, error) {
 	}
 
 	if video.Duration > 13*time.Minute {
-		return nil, fmt.Errorf("%s %w", link, ErrSongTooLong)
+		return nil, fmt.Errorf("video duration too long %s %w", link, ErrSongTooLong)
 	}
 
 	mp3 := filepath.Join(c.dir, fmt.Sprintf("%s.mp3", video.ID))

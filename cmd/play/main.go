@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/duythinht/shout/station"
-
 	"github.com/slack-go/slack"
 )
 
@@ -18,23 +16,31 @@ func main() {
 	api := slack.New(token)
 	channelID := "C0UQ8TKLJ"
 
-	bookmarks, err := api.ListBookmarks(channelID)
+	history, err := api.GetConversationHistoryContext(ctx, &slack.GetConversationHistoryParameters{
+		ChannelID: channelID,
+		Limit:     2,
+	})
 
 	if err != nil {
 		panic(err)
 	}
 
-	for i := range bookmarks {
-		bookmark := bookmarks[i]
-		fmt.Printf("Title: %s\nId: %s\n", bookmark.Title, bookmark.AppID)
-	}
+	latest := history.Messages[1].Timestamp
 
-	s := station.New(token, channelID)
-	play, err := s.History(ctx)
+	fmt.Printf("latest %s\n", latest)
+
+	history, err = api.GetConversationHistoryContext(ctx, &slack.GetConversationHistoryParameters{
+		ChannelID: channelID,
+		Oldest:    latest,
+	})
+
 	if err != nil {
 		panic(err)
 	}
-	for play.Size() > 0 {
-		fmt.Printf("link: %s\n", play.Poll())
+
+	fmt.Printf("latest %s\n", history.Messages[0].Timestamp)
+
+	for _, m := range history.Messages {
+		fmt.Printf("> %s\n", m.Text)
 	}
 }

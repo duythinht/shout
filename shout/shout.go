@@ -12,19 +12,16 @@ import (
 )
 
 const (
-	InitFrameCount = 1000
-	FrameCount     = 100
+	ChunkFrameCount = 100
 )
 
 type Shout struct {
-	buffer *Buffer //buffer, for reserve data
-
-	initialed bool
+	*Buffer //buffer, for reserve data
 }
 
 func New() *Shout {
 	return &Shout{
-		buffer: buffer(),
+		Buffer: buffer(),
 	}
 }
 
@@ -38,85 +35,37 @@ func (s *Shout) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Transfer-Encoding", "chunked")
 	w.Header().Set("Content-Type", "audio/mpeg")
 
-	init := true
 	seg := 0
 
 	for {
-		bSeg := s.buffer.Segment()
+		bSeg := s.Segment()
 		if seg == bSeg {
-			time.Sleep(time.Millisecond * 200)
+			time.Sleep(time.Millisecond * 50)
 			continue
 		}
-		if !init {
-			data, t := s.buffer.Initialization()
-			w.Write(data)
-			time.Sleep(time.Millisecond * t)
-			continue
-		}
-		data, t := s.buffer.Playback()
+
+		data, duration := s.Playback()
 		w.Write(data)
 		seg = bSeg
-		time.Sleep(time.Millisecond * t)
+		time.Sleep(duration)
 	}
 }
 
-func (s *Shout) Stream(r io.ReadCloser) error {
-	if !s.initialed {
-		slog.Info("Initialize Stream for the first time")
-		s.initial(r)
-	}
+func (s *Shout) StreamAll(r io.ReadCloser) error {
 	for {
-		if err := s.playback(r); err != nil {
+		if err := s.stream(r); err != nil {
 			return err
 		}
 	}
 }
 
-func (s *Shout) initial(r io.ReadCloser) error {
-
-	var (
-		idata []byte
-		data  []byte
-	)
-
-	eof := false
-	t := 0
-
-	for i := 0; i < InitFrameCount; i++ {
-		frame := mp3lib.NextFrame(r)
-		if frame == nil {
-			eof = true
-			continue
-		}
-
-		idata = append(idata, frame.RawBytes...)
-
-		if i >= InitFrameCount-FrameCount {
-			data = append(data, frame.RawBytes...)
-			t += 1000 * frame.SampleCount / frame.SamplingRate
-		}
-	}
-
-	s.buffer.WriteInitilize(idata)
-
-	s.buffer.Write(data, time.Duration(t))
-
-	if eof {
-		return io.EOF
-	}
-
-	s.initialed = true
-
-	return nil
-}
-
-func (s *Shout) playback(r io.ReadCloser) error {
+func (s *Shout) stream(r io.ReadCloser) error {
 	var data []byte
 	t := 0
 	eof := false
 
 	// each playback stream 50 frame
-	for i := 0; i < FrameCount; i++ {
+	for i := 0; i < ChunkFrameCount; i++ {
 		frame := mp3lib.NextFrame(r)
 		if frame == nil {
 			eof = true
@@ -126,8 +75,11 @@ func (s *Shout) playback(r io.ReadCloser) error {
 		data = append(data, frame.RawBytes...)
 		t += 1000 * frame.SampleCount / frame.SamplingRate
 	}
-	s.buffer.Write(data, time.Duration(t))
-	time.Sleep(time.Duration(t) * time.Millisecond)
+
+	// duration of buffer will be reduce 5ms for ensure stream gap
+	duration := time.Duration(t) * time.Millisecond
+	s.Write(data, duration)
+	time.Sleep(duration)
 	if eof {
 		return io.EOF
 	}
@@ -142,7 +94,6 @@ type Buffer struct {
 	*sync.RWMutex
 
 	playback []byte
-	initial  []byte
 	seg      int
 	t        time.Duration // current playback duration
 }
@@ -153,20 +104,10 @@ func buffer() *Buffer {
 	}
 }
 
-func (b *Buffer) WriteInitilize(data []byte) {
-	b.Lock()
-	defer b.Unlock()
-	b.initial = data[:]
-}
-
 func (b *Buffer) Write(data []byte, t time.Duration) {
 	b.Lock()
 	defer b.Unlock()
 
-	initial := b.initial[:]
-	initial = initial[len(data):]
-	initial = append(initial, data...)
-	b.initial = initial
 	b.playback = data[:]
 	b.seg++
 	b.t = t
@@ -176,12 +117,6 @@ func (b *Buffer) Playback() ([]byte, time.Duration) {
 	b.RLock()
 	defer b.RUnlock()
 	return b.playback[:], b.t
-}
-
-func (b *Buffer) Initialization() ([]byte, time.Duration) {
-	b.RLock()
-	defer b.RUnlock()
-	return b.initial[:], b.t
 }
 
 func (b *Buffer) Segment() int {

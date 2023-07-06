@@ -1,6 +1,7 @@
 package station
 
 import (
+	"sync"
 	"time"
 
 	"golang.org/x/exp/rand"
@@ -14,12 +15,14 @@ func init() {
 }
 
 type Playlist struct {
+	lock  *sync.RWMutex
 	links []string
 	m     map[string]struct{}
 }
 
 func NewPlaylist() *Playlist {
 	return &Playlist{
+		lock:  &sync.RWMutex{},
 		links: make([]string, 0),
 		m:     make(map[string]struct{}, 0),
 	}

@@ -45,7 +45,10 @@ func main() {
 		link := playlist.Shuffle()
 		song, err := c.GetSong(ctx, link)
 
-		if !errors.Is(err, utube.ErrSongTooLong) {
+		if err != nil {
+			if errors.Is(err, utube.ErrSongTooLong) {
+				continue
+			}
 			qcheck(err)
 		}
 
@@ -53,12 +56,13 @@ func main() {
 
 		slog.Info("Now Playing", slog.String("link", link), slog.String("title", title))
 
-		setTitle(song.Video.Title)
+		err = setTitle(song.Video.Title)
+
 		qcheck(err)
 
-		err = w.Stream(song)
+		err = w.StreamAll(song)
 
-		if !errors.Is(err, io.EOF) {
+		if err != nil && !errors.Is(err, io.EOF) {
 			qcheck(err)
 		}
 

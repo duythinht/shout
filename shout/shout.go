@@ -27,7 +27,9 @@ func New() *Shout {
 
 func (s *Shout) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
-	slog.Info("Client connected", slog.String("ip", getRealIP(r)))
+	ip := getRealIP(r)
+
+	slog.Info("Client connected", slog.String("ip", ip), slog.String("path", r.URL.Path))
 
 	w.Header().Set("Connection", "Keep-Alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
@@ -38,7 +40,17 @@ func (s *Shout) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	seg := 0
 
+	ctx := r.Context()
+
 	for {
+
+		select {
+		case <-ctx.Done():
+			slog.Info("Client disconnected", slog.String("ip", ip), slog.String("path", r.URL.Path))
+			return
+		default:
+		}
+
 		bSeg := s.Segment()
 		if seg == bSeg {
 			time.Sleep(time.Millisecond * 50)

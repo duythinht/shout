@@ -33,8 +33,8 @@ func (s *Shout) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 
-	// Keep-Alive??
-	// w.Header().Set("Connection", "Keep-Alive")
+	// Keep-Alive
+	w.Header().Set("Connection", "Keep-Alive")
 
 	// Cache-Control
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")

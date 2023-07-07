@@ -1,5 +1,6 @@
 *.mp3
 *.webm
+songs/
 logs/
 log/
 .envrc

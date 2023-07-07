@@ -31,20 +31,28 @@ func TestPlaylistAddAndRemove(t *testing.T) {
 func TestPlaylistPoll(t *testing.T) {
 	p := station.NewPlaylist()
 
-	p.Add("abc")
-	p.Add("xyz")
+	p.Add("a")
+	p.Add("b")
+	p.Add("c")
 
 	link := p.Poll()
 
-	if p.Has("xyz") {
+	if p.Has("a") {
 		t.Errorf("item xyz should removed")
 	}
 
-	if link != "xyz" {
+	if link != "a" {
 		t.Errorf("item should be xyz, got %s", link)
 	}
 
-	if p.Size() != 1 {
+	if p.Size() != 2 {
 		t.Errorf("size should be %d", p.Size())
+	}
+
+	links := p.Links()
+	for i, link := range []string{"b", "c"} {
+		if links[i] != link {
+			t.Errorf("not match link %s %s", links[i], link)
+		}
 	}
 }

@@ -77,15 +77,14 @@ func (p *Playlist) Poll() (link string) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
-	lenght := len(p.links)
-
-	if lenght == 0 {
+	if len(p.links) == 0 {
 		return ""
 	}
 
-	link = p.links[lenght-1]
+	link = p.links[0]
 
-	p.links = slices.Delete(p.links, lenght-1, lenght)
+	p.links = p.links[1:]
+
 	maps.DeleteFunc(p.m, func(k string, v struct{}) bool {
 		return k == link
 	})
@@ -99,4 +98,11 @@ func (p *Playlist) Shuffle() (link string) {
 
 	i := rand.Intn(len(p.links))
 	return p.links[i]
+}
+
+func (p Playlist) Links() []string {
+	p.lock.RLock()
+	defer p.lock.RUnlock()
+
+	return p.links[:]
 }

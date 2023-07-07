@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/slack-go/slack"
@@ -87,19 +88,22 @@ func (s Station) History(ctx context.Context) (playlist *Playlist, err error) {
 		cursor = history.ResponseMetaData.NextCursor
 
 		for _, msg := range history.Messages {
-			id, err := ExtractYoutubeID(msg.Text)
-			if err != nil {
-				if errors.Is(err, ErrNotYoutubeLink) {
-					continue
+			for _, line := range strings.Split(msg.Text, "\n") {
+				id, err := ExtractYoutubeID(line)
+				if err != nil {
+					if errors.Is(err, ErrNotYoutubeLink) {
+						continue
+					}
+					return nil, fmt.Errorf("station history, extract id %w", err)
 				}
-				return nil, fmt.Errorf("station history, extract id %w", err)
+				playlist.Add(
+					fmt.Sprintf(
+						"https://www.youtube.com/watch?v=%s",
+						id,
+					),
+				)
 			}
-			playlist.Add(
-				fmt.Sprintf(
-					"https://www.youtube.com/watch?v=%s",
-					id,
-				),
-			)
+
 		}
 
 	}
@@ -192,23 +196,26 @@ func (s *Station) Watch(ctx context.Context) (playlist *Playlist, err error) {
 
 			for i := 0; i < count; i++ {
 				text := last.Messages[count-i-1].Text
-				id, err := ExtractYoutubeID(text)
-				if err != nil {
-					if errors.Is(err, ErrNotYoutubeLink) {
+
+				for _, line := range strings.Split(text, "\n") {
+					id, err := ExtractYoutubeID(line)
+					if err != nil {
+						if errors.Is(err, ErrNotYoutubeLink) {
+							continue
+						}
+						slog.Warn("watch", slog.String("error", err.Error()))
 						continue
 					}
-					slog.Warn("watch", slog.String("error", err.Error()))
-					continue
+
+					link := fmt.Sprintf(
+						"https://www.youtube.com/watch?v=%s",
+						id,
+					)
+
+					slog.Info("Queue added", slog.String("link", link))
+
+					playlist.Add(link)
 				}
-
-				link := fmt.Sprintf(
-					"https://www.youtube.com/watch?v=%s",
-					id,
-				)
-
-				slog.Info("Queue added", slog.String("link", link))
-
-				playlist.Add(link)
 			}
 
 			ts = last.Messages[0].Timestamp

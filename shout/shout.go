@@ -4,7 +4,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/dmulholl/mp3lib"
@@ -16,12 +16,17 @@ const (
 )
 
 type Shout struct {
-	*Buffer //buffer, for reserve data
+	//*Buffer //buffer, for reserve data
+	Buffer *atomic.Pointer[Buffer]
 }
 
 func New() *Shout {
+
+	buf := &atomic.Pointer[Buffer]{}
+	buf.Store(&Buffer{})
+
 	return &Shout{
-		Buffer: buffer(),
+		Buffer: buf,
 	}
 }
 
@@ -50,7 +55,6 @@ func (s *Shout) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	for {
-
 		select {
 		case <-ctx.Done():
 			slog.Info("Client disconnected", slog.String("ip", ip), slog.String("path", r.URL.Path))
@@ -58,30 +62,44 @@ func (s *Shout) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		default:
 		}
 
-		bSeg := s.Segment()
-		if seg == bSeg {
+		b := s.Buffer.Load()
+
+		if seg == b.seg {
 			time.Sleep(time.Millisecond * 50)
 			continue
 		}
 
-		data, duration := s.Playback()
-		_, err := w.Write(data)
+		_, err := w.Write(b.playback)
 		if err != nil {
 			slog.Warn("Client disconnected", slog.String("ip", ip), slog.String("path", r.URL.Path))
 			return
 		}
-		seg = bSeg
-		time.Sleep(duration)
+		seg = b.seg
+		time.Sleep(b.t)
 	}
 }
 
 func (s *Shout) StreamAll(r io.ReadCloser) error {
 
+	count := 0
+
 	for {
+		count++
+
 		chunked, t, err := s.nextChunk(r)
 
-		// alway write chunked
-		s.Write(chunked, t)
+		buf := s.Buffer.Load()
+
+		// Whenever wait duration first N count chunk should be 100ms for ensuring sync
+		if count < 1 {
+			t = 100 * time.Millisecond
+		}
+
+		s.Buffer.Store(&Buffer{
+			playback: chunked[:],
+			seg:      buf.seg + 1,
+			t:        t,
+		})
 
 		time.Sleep(t)
 
@@ -96,7 +114,7 @@ func (s *Shout) nextChunk(r io.ReadCloser) ([]byte, time.Duration, error) {
 	var data []byte
 	t := 0
 
-	// each playback stream 50 frame
+	// each playback stream 0 frame
 	for i := 0; i < ChunkFrameCount; i++ {
 		frame := mp3lib.NextFrame(r)
 		if frame == nil {
@@ -115,38 +133,9 @@ func (s *Shout) Close() error {
 }
 
 type Buffer struct {
-	*sync.RWMutex
-
 	playback []byte
 	seg      int
 	t        time.Duration // current playback duration
-}
-
-func buffer() *Buffer {
-	return &Buffer{
-		RWMutex: &sync.RWMutex{},
-	}
-}
-
-func (b *Buffer) Write(data []byte, t time.Duration) {
-	b.Lock()
-	defer b.Unlock()
-
-	b.playback = data[:]
-	b.seg++
-	b.t = t
-}
-
-func (b *Buffer) Playback() ([]byte, time.Duration) {
-	b.RLock()
-	defer b.RUnlock()
-	return b.playback[:], b.t
-}
-
-func (b *Buffer) Segment() int {
-	b.RLock()
-	defer b.RUnlock()
-	return b.seg
 }
 
 func getRealIP(r *http.Request) string {

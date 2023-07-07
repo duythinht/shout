@@ -1,6 +1,7 @@
 package station
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -15,7 +16,9 @@ var (
 	rx = regexp.MustCompile(`https://(.+.youtube.com|youtu.be)/(watch\?v=([^&^>^|]+)|([^&^>^|]+))`)
 
 	//hardcode stream link, move to config later
-	streamLink = "https://radio.0x97a.com/stream.mp3"
+	streamLink     = "https://radio.0x97a.com/stream.mp3"
+	listLink       = "https://radio.0x97a.com/list.txt"
+	welcomeImagURL = "https://raw.githubusercontent.com/duythinht/shout/master/static/radio-on-air.png"
 
 	ErrNotYoutubeLink = errors.New("not a youtube link")
 )
@@ -213,4 +216,38 @@ func (s *Station) Watch(ctx context.Context) (playlist *Playlist, err error) {
 	}()
 
 	return playlist, nil
+}
+
+func (s *Station) Welcome(ctx context.Context) error {
+
+	title := slack.NewSectionBlock(
+		slack.NewTextBlockObject("mrkdwn", "*The Station is On-Air*", false, false),
+		nil, nil,
+	)
+
+	text := bytes.NewBuffer(nil)
+
+	fmt.Fprintf(text, "*Stream:*\n%s\n", streamLink)
+	fmt.Fprintf(text, "*Queuing:*\n%s\n", listLink)
+
+	content := slack.NewSectionBlock(
+		slack.NewTextBlockObject("mrkdwn", text.String(), false, false),
+		nil,
+		slack.NewAccessory(
+			slack.NewImageBlockElement(welcomeImagURL, "Radio On Air"),
+		),
+	)
+
+	msg := slack.NewBlockMessage(
+		title,
+		content,
+		slack.NewDividerBlock(),
+	)
+
+	_, _, _, err := s.SendMessageContext(ctx, s.channelID, slack.MsgOptionBlocks(msg.Blocks.BlockSet...))
+	if err != nil {
+		return fmt.Errorf("welcome send fail %w", err)
+	}
+
+	return nil
 }

@@ -70,6 +70,9 @@ func main() {
 		qcheck(err)
 	}()
 
+	err = s.Welcome(ctx)
+	qcheck(err)
+
 	for {
 
 		var link string

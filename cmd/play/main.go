@@ -2,8 +2,9 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/duythinht/shout/station"
@@ -12,24 +13,26 @@ import (
 func main() {
 
 	token := os.Getenv("SLACK_TOKEN")
-	ctx := context.Background()
 
 	channelID := "C0UQ8TKLJ"
 
 	s := station.New(token, channelID)
 
-	queue, err := s.Watch(ctx)
+	stop, err := s.Welcome(context.Background())
 
 	if err != nil {
 		panic(err)
 	}
 
-	for {
-		if queue.Size() > 0 {
-			link := queue.Poll()
-			fmt.Println(link)
-		}
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		stop()
+		os.Exit(1)
+	}()
 
+	for {
 		time.Sleep(1 * time.Second)
 	}
 }

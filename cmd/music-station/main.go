@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/duythinht/shout/utube"
 	"github.com/go-chi/chi/v5"
@@ -70,8 +72,17 @@ func main() {
 		qcheck(err)
 	}()
 
-	err = s.Welcome(ctx)
+	stopStation, err := s.Welcome(ctx)
 	qcheck(err)
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		<-c
+		stopStation()
+		os.Exit(0)
+	}()
 
 	for {
 

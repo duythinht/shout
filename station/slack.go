@@ -225,7 +225,7 @@ func (s *Station) Watch(ctx context.Context) (playlist *Playlist, err error) {
 	return playlist, nil
 }
 
-func (s *Station) Welcome(ctx context.Context) error {
+func (s *Station) Welcome(ctx context.Context) (func(), error) {
 
 	title := slack.NewSectionBlock(
 		slack.NewTextBlockObject("mrkdwn", "*The Station is On-Air*", false, false),
@@ -251,10 +251,16 @@ func (s *Station) Welcome(ctx context.Context) error {
 		slack.NewDividerBlock(),
 	)
 
-	_, _, _, err := s.SendMessageContext(ctx, s.channelID, slack.MsgOptionBlocks(msg.Blocks.BlockSet...))
+	_, ts, _, err := s.SendMessageContext(ctx, s.channelID, slack.MsgOptionBlocks(msg.Blocks.BlockSet...))
 	if err != nil {
-		return fmt.Errorf("welcome send fail %w", err)
+		return nil, fmt.Errorf("welcome send fail %w", err)
 	}
 
-	return nil
+	return func() {
+		_, _, err := s.DeleteMessage(s.channelID, ts)
+
+		if err != nil {
+			slog.Warn("delete welcome", slog.String("error", err.Error()))
+		}
+	}, nil
 }

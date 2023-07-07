@@ -47,7 +47,9 @@ func ExtractYoutubeID(message string) (id string, err error) {
 // Station of #music channel
 type Station struct {
 	*slack.Client
-	channelID string
+
+	channelID  string
+	bookmarkID string
 }
 
 // New return station by slack token and channel
@@ -101,26 +103,43 @@ func (s Station) History(ctx context.Context) (playlist *Playlist, err error) {
 	return playlist, nil
 }
 
-func (s *Station) NowPlaying() (func(string) error, error) {
+func (s *Station) SetNowPlaying(title string) error {
+	if s.bookmarkID == "" {
+		id, err := s.lookupBookmark()
+		if err != nil {
+			return err
+		}
+		s.bookmarkID = id
+	}
+
+	title = fmt.Sprintf("Now Playing: %s", title)
+
+	_, err := s.EditBookmark(s.channelID, s.bookmarkID, slack.EditBookmarkParameters{
+		Title: &title,
+		Link:  streamLink,
+	})
+
+	if err != nil {
+		return fmt.Errorf("set now playing %s %s %w", s.channelID, s.bookmarkID, err)
+	}
+	return nil
+}
+
+func (s *Station) lookupBookmark() (string, error) {
 	bookmarks, err := s.ListBookmarks(s.channelID)
 
 	if err != nil {
-		panic(err)
+		return "", fmt.Errorf("looking bookmark %w", err)
 	}
 
 	for i := range bookmarks {
 		bookmark := bookmarks[i]
 		if bookmark.Link == streamLink {
-			return func(title string) error {
-				playingTitle := fmt.Sprintf("Now Playing: %s", title)
-				_, err := s.EditBookmark(s.channelID, bookmark.ID, slack.EditBookmarkParameters{
-					Title: &playingTitle,
-				})
-				return err
-			}, nil
+			return bookmark.ID, nil
 		}
 	}
 
+	// Or add a new once
 	bookmark, err := s.AddBookmark(s.channelID, slack.AddBookmarkParameters{
 		Title: "Now Playing: -",
 		Link:  streamLink,
@@ -128,16 +147,10 @@ func (s *Station) NowPlaying() (func(string) error, error) {
 	})
 
 	if err != nil {
-		return nil, err
+		return "", fmt.Errorf("create bookmark %w", err)
 	}
 
-	return func(title string) error {
-		playingTitle := fmt.Sprintf("Now Playing: %s", title)
-		_, err := s.EditBookmark(s.channelID, bookmark.ID, slack.EditBookmarkParameters{
-			Title: &playingTitle,
-		})
-		return err
-	}, nil
+	return bookmark.ID, nil
 }
 
 func (s *Station) Watch(ctx context.Context) (playlist *Playlist, err error) {

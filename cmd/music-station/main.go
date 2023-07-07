@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
 
 	"github.com/duythinht/shout/utube"
+	"github.com/go-chi/chi/v5"
 
 	"github.com/duythinht/shout/station"
 
@@ -35,19 +37,36 @@ func main() {
 	queue, err := s.Watch(ctx)
 	qcheck(err)
 
-	setTitle, err := s.NowPlaying()
-
-	qcheck(err)
-
-	c := utube.New("./songs/")
+	youtube := utube.New("./songs/")
 
 	w := shout.New()
 
 	defer w.Close()
 
+	mux := chi.NewMux()
+
+	mux.Get("/stream.mp3", w.ServeHTTP)
+
+	mux.Get("/list.txt", func(w http.ResponseWriter, r *http.Request) {
+
+		w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+		w.Header().Set("Pragma", "no-cache")
+		w.Header().Set("Expires", "0")
+
+		fmt.Fprintf(w, "# Songs in Queuing\n\n")
+		for _, link := range queue.Links() {
+			title, err := youtube.GetSongTitle(link)
+			if err != nil {
+				continue
+			}
+
+			fmt.Fprintf(w, "%s - %s\n", link, title)
+		}
+	})
+
 	go func() {
 		slog.Info("Starting server", slog.String("address", address))
-		err := http.ListenAndServe(address, w)
+		err := http.ListenAndServe(address, mux)
 		qcheck(err)
 	}()
 
@@ -64,7 +83,7 @@ func main() {
 			link = playlist.Shuffle()
 		}
 
-		song, err := c.GetSong(ctx, link)
+		song, err := youtube.GetSong(ctx, link)
 
 		if err != nil {
 			// skip this song if get some error
@@ -76,7 +95,7 @@ func main() {
 
 		slog.Info("Now Playing", slog.String("link", link), slog.String("title", title))
 
-		err = setTitle(song.Video.Title)
+		err = s.SetNowPlaying(song.Video.Title)
 
 		qcheck(err)
 

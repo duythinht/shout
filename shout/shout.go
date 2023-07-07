@@ -31,9 +31,16 @@ func (s *Shout) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	slog.Info("Client connected", slog.String("ip", ip), slog.String("path", r.URL.Path))
 
-	w.Header().Set("Connection", "Keep-Alive")
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Cache-Control", "no-cache")
+
+	// Keep-Alive??
+	// w.Header().Set("Connection", "Keep-Alive")
+
+	// Cache-Control
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	w.Header().Set("Pragma", "no-cache")
+	w.Header().Set("Expires", "0")
+
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Transfer-Encoding", "chunked")
 	w.Header().Set("Content-Type", "audio/mpeg")
@@ -69,38 +76,38 @@ func (s *Shout) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Shout) StreamAll(r io.ReadCloser) error {
+
 	for {
-		if err := s.stream(r); err != nil {
+		chunked, t, err := s.nextChunk(r)
+
+		// alway write chunked
+		s.Write(chunked, t)
+
+		time.Sleep(t)
+
+		// usual return when EOF
+		if err != nil {
 			return err
 		}
 	}
 }
 
-func (s *Shout) stream(r io.ReadCloser) error {
+func (s *Shout) nextChunk(r io.ReadCloser) ([]byte, time.Duration, error) {
 	var data []byte
 	t := 0
-	eof := false
 
 	// each playback stream 50 frame
 	for i := 0; i < ChunkFrameCount; i++ {
 		frame := mp3lib.NextFrame(r)
 		if frame == nil {
-			eof = true
-			continue
+			return data, time.Duration(t), io.EOF
 		}
 
 		data = append(data, frame.RawBytes...)
-		t += 1000 * frame.SampleCount / frame.SamplingRate
+		t += int(time.Second) * frame.SampleCount / frame.SamplingRate
 	}
 
-	// duration of buffer will be reduce 5ms for ensure stream gap
-	duration := time.Duration(t) * time.Millisecond
-	s.Write(data, duration)
-	time.Sleep(duration)
-	if eof {
-		return io.EOF
-	}
-	return nil
+	return data, time.Duration(t), nil
 }
 
 func (s *Shout) Close() error {

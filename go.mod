@@ -8,6 +8,8 @@ require (
 	golang.org/x/net v0.11.0
 )
 
+require github.com/go-chi/chi/v5 v5.0.8 // indirect
+
 require (
 	github.com/bitly/go-simplejson v0.5.0 // indirect
 	github.com/dlclark/regexp2 v1.9.0 // indirect

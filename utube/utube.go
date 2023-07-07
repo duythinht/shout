@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/duythinht/shout/ffmpeg"
@@ -27,7 +28,8 @@ var (
 
 type Client struct {
 	*youtube.Client
-	dir string
+	dir        string
+	songTitles *sync.Map
 }
 
 type Song struct {
@@ -56,8 +58,25 @@ func New(songDirectory string) *Client {
 		Client: &youtube.Client{
 			HTTPClient: &http.Client{Transport: httpTransport},
 		},
-		dir: songDirectory,
+		dir:        songDirectory,
+		songTitles: &sync.Map{},
 	}
+}
+
+func (c *Client) GetSongTitle(link string) (string, error) {
+	if title, ok := c.songTitles.Load(link); ok {
+		return title.(string), nil
+	}
+
+	video, err := c.GetVideo(link)
+
+	if err != nil {
+		return "", fmt.Errorf("get video info %w", err)
+	}
+
+	c.songTitles.Store(link, video.Title)
+
+	return video.Title, nil
 }
 
 func (c *Client) GetSong(ctx context.Context, link string) (*Song, error) {

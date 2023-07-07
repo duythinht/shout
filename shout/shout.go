@@ -12,12 +12,14 @@ import (
 )
 
 const (
-	ChunkFrameCount = 100
+	ChunkFrameCount    = 50
+	PreserveChunkCount = 5
 )
 
 type Shout struct {
 	//*Buffer //buffer, for reserve data
 	Buffer *atomic.Pointer[Buffer]
+	init   bool
 }
 
 func New() *Shout {
@@ -27,6 +29,7 @@ func New() *Shout {
 
 	return &Shout{
 		Buffer: buf,
+		init:   false,
 	}
 }
 
@@ -54,6 +57,8 @@ func (s *Shout) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	ctx := r.Context()
 
+	init := false
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -69,11 +74,17 @@ func (s *Shout) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		_, err := w.Write(b.playback)
-		if err != nil {
-			slog.Warn("Client disconnected", slog.String("ip", ip), slog.String("path", r.URL.Path))
-			return
+		if !init {
+			w.Write(b.playback)
+			init = true
+		} else {
+			_, err := w.Write(b.playback[len(b.playback)-b.lenght:])
+			if err != nil {
+				slog.Warn("Client disconnected", slog.String("ip", ip), slog.String("path", r.URL.Path))
+				return
+			}
 		}
+
 		seg = b.seg
 		time.Sleep(b.t)
 	}
@@ -81,24 +92,27 @@ func (s *Shout) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func (s *Shout) StreamAll(r io.ReadCloser) error {
 
-	count := 0
+	if !s.init {
+		err := s.initialize(r)
+		if err != nil {
+			return err
+		}
+		s.init = true
+	}
 
 	for {
-		count++
 
-		chunked, t, err := s.nextChunk(r)
+		chunked, t, err := nextchunk(r)
 
 		buf := s.Buffer.Load()
 
-		// Whenever wait duration first N count chunk should be 100ms for ensuring sync
-		if count < 1 {
-			t = 100 * time.Millisecond
-		}
+		playback := buf.playback[len(chunked):]
 
 		s.Buffer.Store(&Buffer{
-			playback: chunked[:],
+			playback: append(playback, chunked...),
 			seg:      buf.seg + 1,
 			t:        t,
+			lenght:   len(chunked),
 		})
 
 		time.Sleep(t)
@@ -110,7 +124,42 @@ func (s *Shout) StreamAll(r io.ReadCloser) error {
 	}
 }
 
-func (s *Shout) nextChunk(r io.ReadCloser) ([]byte, time.Duration, error) {
+func (s *Shout) initialize(r io.ReadCloser) error {
+
+	slog.Info("Initilize a stream", slog.Int("preserve-chunk-count", PreserveChunkCount))
+
+	var (
+		playback []byte
+		chunked  []byte
+		t        time.Duration
+		err      error
+		lenght   int
+	)
+
+	for i := 0; i < PreserveChunkCount; i++ {
+		chunked, t, err = nextchunk(r)
+
+		if err != nil {
+			return err
+		}
+
+		playback = append(playback, chunked...)
+		lenght = len(chunked)
+	}
+
+	s.Buffer.Store(&Buffer{
+		playback: playback[:],
+		seg:      1,
+		t:        t,
+		lenght:   lenght,
+	})
+
+	time.Sleep(t)
+
+	return nil
+}
+
+func nextchunk(r io.ReadCloser) ([]byte, time.Duration, error) {
 	var data []byte
 	t := 0
 
@@ -136,6 +185,7 @@ type Buffer struct {
 	playback []byte
 	seg      int
 	t        time.Duration // current playback duration
+	lenght   int
 }
 
 func getRealIP(r *http.Request) string {

@@ -1,15 +1,12 @@
-package main
+package shout
 
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
-	"os"
 	"time"
 
 	"github.com/dmulholl/mp3lib"
-	"github.com/duythinht/shout/shout"
 	"golang.org/x/exp/slog"
 )
 
@@ -19,11 +16,16 @@ var (
 
 const (
 	StreamDataTimeout = 200 * time.Millisecond
+	ChunkFrameCount   = 50
 )
 
 type chunk struct {
 	data []byte
 	t    time.Duration
+}
+
+func (c *chunk) Duration() time.Duration {
+	return c.t
 }
 
 type Streamer struct {
@@ -37,7 +39,7 @@ func (s *Streamer) NextChunk() *chunk {
 	return <-s._chunk
 }
 
-func open() *Streamer {
+func OpenStreamer() *Streamer {
 
 	r, w := io.Pipe()
 
@@ -60,12 +62,13 @@ func (s *Streamer) Read(p []byte) (n int, err error) {
 
 func (s *Streamer) Stream(_ context.Context) {
 	go func() {
+		count := 0
 		for {
 			var data []byte
 			t := 0
 
 			// each playback stream 0 frame
-			for i := 0; i < 50; i++ {
+			for i := 0; i < ChunkFrameCount; i++ {
 				frame := mp3lib.NextFrame(s.r)
 				if frame == nil {
 					continue
@@ -75,15 +78,24 @@ func (s *Streamer) Stream(_ context.Context) {
 				t += int(time.Second) * frame.SampleCount / frame.SamplingRate
 			}
 
-			duration := time.Duration(t)
+			duration := time.Duration(t) - (10 * time.Millisecond)
 
+			slog.Info("send chunk", slog.Int("count", count))
 			s._chunk <- &chunk{
 				data: data,
 				t:    duration,
 			}
+
+			count++
+			if count < PreserveChunkCount {
+				continue
+			}
+			slog.Info("streaming", slog.Duration("t", duration))
 			time.Sleep(duration)
 		}
 	}()
+
+	started := false
 
 	for {
 		select {
@@ -92,8 +104,15 @@ func (s *Streamer) Stream(_ context.Context) {
 			if err != nil {
 				slog.Warn("stream, write mp3", slog.String("error", err.Error()))
 			}
+			started = true
 		case <-time.After(StreamDataTimeout):
 			//slog.Warn("no stream data", slog.Duration("timeout", StreamDataTimeout))
+
+			if !started {
+				slog.Warn("not started")
+				continue
+			}
+
 			s._chunk <- &chunk{
 				data: nil,
 				t:    StreamDataTimeout,
@@ -104,40 +123,4 @@ func (s *Streamer) Stream(_ context.Context) {
 
 func (s *Streamer) data() <-chan []byte {
 	return s._data
-}
-
-func main() {
-
-	files := []string{
-		"1tBlaVjWwbI.mp3",
-		"_8vekzCF04Q.mp3",
-	}
-
-	_ = files
-
-	s := shout.OpenStreamer()
-
-	go s.Stream(context.Background())
-
-	go func() {
-		for {
-			chunked := s.NextChunk()
-			fmt.Printf("timeout %s\n", chunked.Duration())
-		}
-	}()
-
-	//time.Sleep(10 * time.Second)
-
-	for _, filename := range files {
-
-		f, err := os.Open("./songs/" + filename)
-
-		if err != nil {
-			panic(err)
-		}
-
-		io.Copy(s, f)
-
-		time.Sleep(2 * time.Second)
-	}
 }

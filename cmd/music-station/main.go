@@ -31,23 +31,26 @@ func main() {
 
 	channelID := "C0UQ8TKLJ"
 
-	s := station.New(token, channelID)
+	station := station.New(token, channelID)
 
-	playlist, err := s.History(ctx)
+	playlist, err := station.History(ctx)
 	qcheck(err)
 
-	queue, err := s.Watch(ctx)
+	queue, err := station.Watch(ctx)
 	qcheck(err)
 
 	youtube := utube.New("./songs/")
+	streamer := shout.OpenStreamer()
 
-	w := shout.New()
+	shout := shout.New()
+	defer shout.Close()
 
-	defer w.Close()
+	go streamer.Stream(ctx)
+	go shout.Attach(streamer)
 
 	mux := chi.NewMux()
 
-	mux.Get("/stream.mp3", w.ServeHTTP)
+	mux.Get("/stream.mp3", shout.ServeHTTP)
 
 	mux.Get("/list.txt", func(w http.ResponseWriter, r *http.Request) {
 
@@ -72,15 +75,15 @@ func main() {
 		qcheck(err)
 	}()
 
-	stopStation, err := s.Welcome(ctx)
-	qcheck(err)
+	//stopStation, err := station.Welcome(ctx)
+	//qcheck(err)
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
 		<-c
-		stopStation()
+		//stopStation()
 		os.Exit(0)
 	}()
 
@@ -109,11 +112,11 @@ func main() {
 
 		slog.Info("Now Playing", slog.String("link", link), slog.String("title", title))
 
-		err = s.SetNowPlaying(song.Video.Title)
+		err = station.SetNowPlaying(song.Video.Title)
 
 		qcheck(err)
 
-		err = w.StreamAll(song)
+		_, err = io.Copy(streamer, song)
 
 		if err != nil && !errors.Is(err, io.EOF) {
 			qcheck(err)

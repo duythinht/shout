@@ -40,7 +40,7 @@ func main() {
 	qcheck(err)
 
 	youtube := utube.New("./songs/")
-	streamer := shout.OpenStreamer()
+	streamer := shout.OpenStream()
 
 	shout := shout.New()
 	defer shout.Close()
@@ -75,15 +75,15 @@ func main() {
 		qcheck(err)
 	}()
 
-	//stopStation, err := station.Welcome(ctx)
-	//qcheck(err)
+	stopStation, err := station.Welcome(ctx)
+	qcheck(err)
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
 		<-c
-		//stopStation()
+		stopStation()
 		os.Exit(0)
 	}()
 

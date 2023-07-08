@@ -52,11 +52,17 @@ func (s *Shout) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	seg := 0
 
-	//ctx := r.Context()
+	ctx := r.Context()
 
 	init := false
 
 	for {
+		select {
+		case <-ctx.Done():
+			slog.Info("Client disconnected", slog.String("ip", ip), slog.String("path", r.URL.Path))
+			return
+		default:
+		}
 
 		b := s.Buffer.Load()
 
@@ -68,7 +74,6 @@ func (s *Shout) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		if !init {
 			w.Write(b.playback)
 			init = true
-
 		} else {
 			_, err := w.Write(b.playback[len(b.playback)-b.lenght:])
 			if err != nil {
@@ -91,27 +96,38 @@ func (s *Shout) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func (s *Shout) Attach(st *Streamer) {
 
 	var (
-		initialPlayback []byte
-		chunked         *chunk
+		playback []byte
+		chunked  *chunk
 	)
 
-	for i := 0; i < PreserveChunkCount; i++ {
+	// Reserving buffer
+
+	count := PreserveChunkCount
+
+	for count > 0 {
 		chunked = st.NextChunk()
-		initialPlayback = append(initialPlayback, chunked.data...)
+		if len(chunked.data) > 0 {
+			playback = append(playback, chunked.data...)
+			count--
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 
 	slog.Info(
 		"Init playback",
-		slog.Int("playback-len", len(initialPlayback)),
+		slog.Int("playback-len", len(playback)),
 		slog.Int("chunk-len", len(chunked.data)),
 	)
 
+	// Send init playback buffer
 	s.Buffer.Store(&Buffer{
-		playback: initialPlayback,
+		playback: playback,
 		seg:      0,
 		t:        chunked.t,
 		lenght:   len(chunked.data),
 	})
+
+	// Then start stream
 
 	for {
 		chunked := st.NextChunk()
@@ -126,6 +142,7 @@ func (s *Shout) Attach(st *Streamer) {
 			t:        chunked.t,
 			lenght:   len(chunked.data),
 		})
+		time.Sleep(chunked.t)
 	}
 }
 

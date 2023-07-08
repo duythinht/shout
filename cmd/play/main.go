@@ -3,12 +3,12 @@ package main
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"time"
 
 	"github.com/dmulholl/mp3lib"
+	"github.com/slack-go/slack"
 )
 
 var (
@@ -90,40 +90,12 @@ func (s *Streamer) NextChunk() *chunk {
 }
 
 func main() {
+	channelID := "C0UQ8TKLJ"
+	api := slack.New(os.Getenv("SLACK_TOKEN"))
+	last, _ := api.GetConversationHistory(&slack.GetConversationHistoryParameters{
+		ChannelID: channelID,
+		Limit:     1,
+	})
 
-	files := []string{
-		"1tBlaVjWwbI.mp3",
-		"_8vekzCF04Q.mp3",
-	}
-
-	_ = files
-
-	s := Open()
-
-	go s.Stream(context.Background())
-
-	go func() {
-		for {
-			chunked := s.NextChunk()
-			time.Sleep(chunked.t)
-			fmt.Printf("timeout %s\n", chunked.t)
-		}
-	}()
-
-	//time.Sleep(10 * time.Second)
-
-	for _, filename := range files {
-
-		fmt.Printf("Stream %s\n", filename)
-
-		f, err := os.Open("./songs/" + filename)
-
-		if err != nil {
-			panic(err)
-		}
-
-		io.Copy(s, f)
-
-		time.Sleep(2 * time.Second)
-	}
+	api.DeleteMessage(channelID, last.Messages[0].Timestamp)
 }

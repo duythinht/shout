@@ -1,0 +1,10 @@
+# flyctl launch added from .gitignore
+**/*.mp3
+**/*.webm
+**/songs
+**/logs
+**/log
+**/.envrc
+**/.idea
+**/.orig
+fly.toml

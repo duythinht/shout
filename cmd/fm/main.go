@@ -18,6 +18,7 @@ import (
 
 func main() {
 	ctx := context.Background()
+	next := make(chan struct{})
 
 	address := os.Getenv("SERVER_ADDRESS")
 
@@ -30,12 +31,16 @@ func main() {
 	shout := shout.New()
 	defer shout.Close()
 
-	go streamer.Stream(ctx)
+	go streamer.Stream(ctx, next)
 	go shout.Attach(streamer)
 
 	mux := chi.NewMux()
 
 	mux.Get("/stream.mp3", shout.ServeHTTP)
+	mux.Post("/next", func(w http.ResponseWriter, r *http.Request) {
+		slog.Info("Skip current song requested")
+		next <- struct{}{}
+	})
 
 	go func() {
 		slog.Info("Starting server", slog.String("address", address))
@@ -67,8 +72,8 @@ func main() {
 			return err
 		}
 
-		slog.Info("Sleep 10 second before move to next song")
-		time.Sleep(10 * time.Second)
+		slog.Info("Sleep 1 second before move to next song")
+		time.Sleep(1 * time.Second)
 		return nil
 	})
 

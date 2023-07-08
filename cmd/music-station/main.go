@@ -21,9 +21,11 @@ import (
 )
 
 func main() {
-	ctx := context.Background()
 	token := os.Getenv("SLACK_TOKEN")
 	address := os.Getenv("SERVER_ADDRESS")
+
+	ctx := context.Background()
+	next := make(chan struct{})
 
 	if address == "" {
 		address = "0.0.0.0:8000"
@@ -45,7 +47,7 @@ func main() {
 	shout := shout.New()
 	defer shout.Close()
 
-	go streamer.Stream(ctx)
+	go streamer.Stream(ctx, next)
 	go shout.Attach(streamer)
 
 	mux := chi.NewMux()
@@ -67,6 +69,11 @@ func main() {
 
 			fmt.Fprintf(w, "%s - %s\n", link, title)
 		}
+	})
+
+	mux.Post("/next", func(w http.ResponseWriter, r *http.Request) {
+		slog.Info("Song skip requested")
+		next <- struct{}{}
 	})
 
 	go func() {

@@ -42,8 +42,21 @@ func (s *Streamer) Read(p []byte) (n int, err error) {
 	return s.r.Read(p)
 }
 
-func (s *Streamer) Stream(_ context.Context) {
+func (s *Streamer) Stream(ctx context.Context, next chan struct{}) {
 	for {
+		// handle next
+		select {
+		case <-next:
+			for {
+
+				tag := mp3lib.NextID3v2Tag(s.r)
+				if tag != nil {
+					break
+				}
+			}
+		default:
+		}
+
 		var data []byte
 		t := 0
 

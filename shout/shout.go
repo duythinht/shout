@@ -1,19 +1,16 @@
 package shout
 
 import (
-	"io"
 	"net/http"
 	"strings"
 	"sync/atomic"
 	"time"
 
-	"github.com/dmulholl/mp3lib"
 	"golang.org/x/exp/slog"
 )
 
 const (
-	ChunkFrameCount    = 50
-	PreserveChunkCount = 5
+	PreserveChunkCount = 3
 )
 
 type Shout struct {
@@ -80,7 +77,12 @@ func (s *Shout) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		} else {
 			_, err := w.Write(b.playback[len(b.playback)-b.lenght:])
 			if err != nil {
-				slog.Warn("Client disconnected", slog.String("ip", ip), slog.String("path", r.URL.Path))
+				slog.Warn(
+					"Client disconnected",
+					slog.String("ip", ip),
+					slog.String("path", r.URL.Path),
+					slog.String("error", err.Error()),
+				)
 				return
 			}
 		}
@@ -90,91 +92,58 @@ func (s *Shout) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Shout) StreamAll(r io.ReadCloser) error {
-
-	if !s.init {
-		err := s.initialize(r)
-		if err != nil {
-			return err
-		}
-		s.init = true
-	}
-
-	for {
-
-		chunked, t, err := nextchunk(r)
-
-		buf := s.Buffer.Load()
-
-		playback := buf.playback[len(chunked):]
-
-		s.Buffer.Store(&Buffer{
-			playback: append(playback, chunked...),
-			seg:      buf.seg + 1,
-			t:        t,
-			lenght:   len(chunked),
-		})
-
-		time.Sleep(t)
-
-		// usual return when EOF
-		if err != nil {
-			return err
-		}
-	}
-}
-
-func (s *Shout) initialize(r io.ReadCloser) error {
-
-	slog.Info("Initilize a stream", slog.Int("preserve-chunk-count", PreserveChunkCount))
+// Attach to a streamer
+func (s *Shout) Attach(st *Streamer) {
 
 	var (
 		playback []byte
-		chunked  []byte
-		t        time.Duration
-		err      error
-		lenght   int
+		chunked  *chunk
 	)
 
-	for i := 0; i < PreserveChunkCount; i++ {
-		chunked, t, err = nextchunk(r)
+	// Reserving buffer
 
-		if err != nil {
-			return err
+	count := PreserveChunkCount
+
+	for count > 0 {
+		chunked = st.NextChunk()
+		if len(chunked.data) > 0 {
+			playback = append(playback, chunked.data...)
+			count--
 		}
-
-		playback = append(playback, chunked...)
-		lenght = len(chunked)
+		time.Sleep(50 * time.Millisecond)
 	}
 
+	slog.Info(
+		"Init playback",
+		slog.Int("playback-len", len(playback)),
+		slog.Int("chunk-len", len(chunked.data)),
+	)
+
+	// Send init playback buffer
 	s.Buffer.Store(&Buffer{
-		playback: playback[:],
-		seg:      1,
-		t:        t,
-		lenght:   lenght,
+		playback: playback,
+		seg:      0,
+		t:        chunked.t,
+		lenght:   len(chunked.data),
 	})
 
-	time.Sleep(t)
+	// Then start stream
 
-	return nil
-}
+	for {
+		chunked := st.NextChunk()
 
-func nextchunk(r io.ReadCloser) ([]byte, time.Duration, error) {
-	var data []byte
-	t := 0
+		buf := s.Buffer.Load()
 
-	// each playback stream 0 frame
-	for i := 0; i < ChunkFrameCount; i++ {
-		frame := mp3lib.NextFrame(r)
-		if frame == nil {
-			return data, time.Duration(t), io.EOF
-		}
+		playback := buf.playback[len(chunked.data):]
 
-		data = append(data, frame.RawBytes...)
-		t += int(time.Second) * frame.SampleCount / frame.SamplingRate
+		s.Buffer.Store(&Buffer{
+			playback: append(playback, chunked.data...),
+			seg:      buf.seg + 1,
+			t:        chunked.t,
+			lenght:   len(chunked.data),
+		})
+		time.Sleep(chunked.t)
 	}
-
-	return data, time.Duration(t), nil
 }
 
 func (s *Shout) Close() error {

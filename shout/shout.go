@@ -97,7 +97,7 @@ func (s *Shout) Attach(st *Streamer) {
 
 	var (
 		playback []byte
-		chunked  *chunk
+		chunked  *Chunk
 	)
 
 	// Reserving buffer

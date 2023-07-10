@@ -9,16 +9,16 @@ import (
 )
 
 const (
-	ReadChunkedTimeout = 200 * time.Millisecond
+	ReadChunkedDelayCount = 5
 )
 
-type chunk struct {
+type Chunk struct {
 	data []byte
 	t    time.Duration
 }
 
 type Streamer struct {
-	_chunk chan *chunk
+	_chunk chan *Chunk
 	r      *io.PipeReader
 	w      *io.PipeWriter
 }
@@ -28,7 +28,7 @@ func OpenStream() *Streamer {
 	r, w := io.Pipe()
 
 	return &Streamer{
-		_chunk: make(chan *chunk),
+		_chunk: make(chan *Chunk),
 		r:      r,
 		w:      w,
 	}
@@ -73,7 +73,7 @@ func (s *Streamer) Stream(ctx context.Context, next chan struct{}) {
 
 		duration := time.Duration(t)
 
-		s._chunk <- &chunk{
+		s._chunk <- &Chunk{
 			data: data,
 			t:    duration,
 		}
@@ -81,14 +81,20 @@ func (s *Streamer) Stream(ctx context.Context, next chan struct{}) {
 	}
 }
 
-func (s *Streamer) NextChunk() *chunk {
+func (s *Streamer) NextChunk() *Chunk {
 	select {
 	case chunked := <-s._chunk:
 		return chunked
-	case <-time.After(ReadChunkedTimeout):
-		return &chunk{
-			data: nil,
-			t:    ReadChunkedTimeout,
+	case <-time.After(ReadChunkedDelayCount * silentDuration):
+		var data []byte
+
+		for i := 0; i < ReadChunkedDelayCount; i++ {
+			data = append(data, silentData[:]...)
+		}
+
+		return &Chunk{
+			data: data,
+			t:    ReadChunkedDelayCount * silentDuration,
 		}
 	}
 }

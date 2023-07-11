@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	PreserveChunkCount = 3
+	BufferLength = 3 * time.Second
 )
 
 type Shout struct {
@@ -75,7 +75,7 @@ func (s *Shout) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.Write(b.playback)
 			init = true
 		} else {
-			_, err := w.Write(b.playback[len(b.playback)-b.lenght:])
+			_, err := w.Write(b.playback[len(b.playback)-b.length:])
 			if err != nil {
 				slog.Warn(
 					"Client disconnected",
@@ -101,22 +101,19 @@ func (s *Shout) Attach(st *Streamer) {
 	)
 
 	// Reserving buffer
+	t := time.Duration(0)
 
-	count := PreserveChunkCount
-
-	for count > 0 {
+	for t < BufferLength {
 		chunked = st.NextChunk()
-		if len(chunked.data) > 0 {
-			playback = append(playback, chunked.data...)
-			count--
-		}
-		time.Sleep(50 * time.Millisecond)
+		playback = append(playback, chunked.data...)
+		t += chunked.t
 	}
 
 	slog.Info(
 		"Init playback",
-		slog.Int("playback-len", len(playback)),
+		slog.Int("playback-length", len(playback)),
 		slog.Int("chunk-len", len(chunked.data)),
+		slog.Duration("preserve", t),
 	)
 
 	// Send init playback buffer
@@ -124,7 +121,7 @@ func (s *Shout) Attach(st *Streamer) {
 		playback: playback,
 		seg:      0,
 		t:        chunked.t,
-		lenght:   len(chunked.data),
+		length:   len(chunked.data),
 	})
 
 	// Then start stream
@@ -140,7 +137,7 @@ func (s *Shout) Attach(st *Streamer) {
 			playback: append(playback, chunked.data...),
 			seg:      buf.seg + 1,
 			t:        chunked.t,
-			lenght:   len(chunked.data),
+			length:   len(chunked.data),
 		})
 		time.Sleep(chunked.t)
 	}
@@ -154,7 +151,7 @@ type Buffer struct {
 	playback []byte
 	seg      int
 	t        time.Duration // current playback duration
-	lenght   int
+	length   int
 }
 
 func getRealIP(r *http.Request) string {

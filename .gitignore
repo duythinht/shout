@@ -6,3 +6,4 @@ log/
 .envrc
 .idea
 .orig
+.DS_Store

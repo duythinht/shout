@@ -2,14 +2,17 @@ package main
 
 import (
 	"context"
+	"errors"
 	"io"
-	"io/fs"
 	"net/http"
 	"os"
-	"path/filepath"
-	"time"
+	"os/signal"
+	"syscall"
 
+	"github.com/duythinht/shout/utube"
 	"github.com/go-chi/chi/v5"
+
+	"github.com/duythinht/shout/station"
 
 	"github.com/duythinht/shout/shout"
 
@@ -17,15 +20,24 @@ import (
 )
 
 func main() {
+	token := os.Getenv("SLACK_TOKEN")
+	address := os.Getenv("SERVER_ADDRESS")
+
 	ctx := context.Background()
 	next := make(chan struct{})
-
-	address := os.Getenv("SERVER_ADDRESS")
 
 	if address == "" {
 		address = "0.0.0.0:8000"
 	}
 
+	channelID := "C0UQ8TKLJ"
+
+	station := station.New(token, channelID)
+
+	playlist, err := station.History(ctx)
+	qcheck(err)
+
+	youtube := utube.New("./songs/")
 	streamer := shout.OpenStream()
 
 	shout := shout.New()
@@ -37,8 +49,9 @@ func main() {
 	mux := chi.NewMux()
 
 	mux.Get("/stream.mp3", shout.ServeHTTP)
+
 	mux.Post("/next", func(w http.ResponseWriter, r *http.Request) {
-		slog.Info("Skip current song requested")
+		slog.Info("Song skip requested")
 		next <- struct{}{}
 	})
 
@@ -48,39 +61,38 @@ func main() {
 		qcheck(err)
 	}()
 
-	err := filepath.Walk("./songs", func(path string, info fs.FileInfo, err error) error {
-		if err != nil {
-			return err
-		}
-		if info.IsDir() {
-			return nil
-		}
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 
-		slog.Info("Streaming song...", slog.String("path", path))
+	go func() {
+		<-c
+		os.Exit(0)
+	}()
 
-		f, err := os.Open(path)
+	for {
 
-		if err != nil {
-			return err
-		}
+		link := playlist.Shuffle()
 
-		defer f.Close()
-
-		_, err = io.Copy(streamer, f)
+		song, err := youtube.GetSong(ctx, link)
 
 		if err != nil {
-			return err
+			// skip this song if get some error
+			slog.Warn("get song", slog.String("error", err.Error()))
+			continue
 		}
 
-		slog.Info("Sleep 1 second before move to next song")
-		time.Sleep(1 * time.Second)
-		return nil
-	})
+		title := song.Video.Title
 
-	if err != nil {
-		slog.Error("play", slog.String("error", err.Error()))
+		slog.Info("Now Playing", slog.String("link", link), slog.String("title", title))
+
+		_, err = io.Copy(streamer, song)
+
+		if err != nil && !errors.Is(err, io.EOF) {
+			qcheck(err)
+		}
+
+		song.Close()
 	}
-
 }
 
 func qcheck(err error) {

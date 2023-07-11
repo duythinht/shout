@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	ReadChunkedDelayCount = 5
+	ReadChunkedTimeout = 100 * time.Millisecond
 )
 
 type Chunk struct {
@@ -48,7 +48,6 @@ func (s *Streamer) Stream(ctx context.Context, next chan struct{}) {
 		select {
 		case <-next:
 			for {
-
 				tag := mp3lib.NextID3v2Tag(s.r)
 				if tag != nil {
 					break
@@ -85,16 +84,16 @@ func (s *Streamer) NextChunk() *Chunk {
 	select {
 	case chunked := <-s._chunk:
 		return chunked
-	case <-time.After(ReadChunkedDelayCount * silentDuration):
+	case <-time.After(ReadChunkedTimeout):
+		t := 0
 		var data []byte
-
-		for i := 0; i < ReadChunkedDelayCount; i++ {
+		for t < int(ReadChunkedTimeout) {
+			t += silentDuration
 			data = append(data, silentData[:]...)
 		}
-
 		return &Chunk{
 			data: data,
-			t:    ReadChunkedDelayCount * silentDuration,
+			t:    time.Duration(t),
 		}
 	}
 }

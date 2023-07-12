@@ -9,12 +9,13 @@ import (
 )
 
 const (
-	ReadChunkedTimeout = 100 * time.Millisecond
+	ReadChunkedTimeout = 50 * time.Millisecond
 )
 
 type Chunk struct {
-	data []byte
-	t    time.Duration
+	data    []byte
+	t       time.Duration
+	timeout bool
 }
 
 type Streamer struct {
@@ -73,8 +74,9 @@ func (s *Streamer) Stream(ctx context.Context, next chan struct{}) {
 		duration := time.Duration(t)
 
 		s._chunk <- &Chunk{
-			data: data,
-			t:    duration,
+			data:    data,
+			t:       duration,
+			timeout: false,
 		}
 
 	}
@@ -87,13 +89,16 @@ func (s *Streamer) NextChunk() *Chunk {
 	case <-time.After(ReadChunkedTimeout):
 		t := 0
 		var data []byte
-		for t < int(ReadChunkedTimeout) {
+
+		// Make the song skip smooth by add 1 second chunk
+		for t < int(time.Second) {
 			t += silentDuration
 			data = append(data, silentData[:]...)
 		}
 		return &Chunk{
-			data: data,
-			t:    time.Duration(t),
+			data:    data,
+			t:       time.Duration(t),
+			timeout: true,
 		}
 	}
 }

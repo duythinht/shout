@@ -76,7 +76,7 @@ func main() {
 		song, err := youtube.GetSong(ctx, link)
 
 		if err != nil {
-			// skip this song if get some error
+			// skip this song if client get some error
 			slog.Warn("get song", slog.String("error", err.Error()))
 			continue
 		}

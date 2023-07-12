@@ -4,7 +4,7 @@
 #
 
 app = "duythinht-shout"
-primary_region = "sea"
+primary_region = "lax"
 [env]
   SERVER_ADDRESS = "0.0.0.0:8080"
 

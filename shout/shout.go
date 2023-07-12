@@ -75,6 +75,13 @@ func (s *Shout) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			w.Write(b.playback)
 			init = true
 		} else {
+			slog.Debug(
+				"stream.mp3",
+				slog.Int("buffer-length", b.length),
+				slog.Duration("duration", b.t),
+				slog.Int("seg", seg),
+				slog.Int("buffer-length", len(b.playback)),
+			)
 			_, err := w.Write(b.playback[len(b.playback)-b.length:])
 			if err != nil {
 				slog.Warn(
@@ -105,8 +112,10 @@ func (s *Shout) Attach(st *Streamer) {
 
 	for t < BufferLength {
 		chunked = st.NextChunk()
-		playback = append(playback, chunked.data...)
-		t += chunked.t
+		if !chunked.timeout {
+			playback = append(playback, chunked.data...)
+			t += chunked.t
+		}
 	}
 
 	slog.Info(
@@ -130,12 +139,20 @@ func (s *Shout) Attach(st *Streamer) {
 		chunked := st.NextChunk()
 
 		buf := s.Buffer.Load()
+		seg := buf.seg + 1
 
-		playback := buf.playback[len(chunked.data):]
+		slog.Info(
+			"send chunk",
+			slog.Int("seg", seg),
+			slog.Int("chunk-length", len(chunked.data)),
+			slog.Int("playback-length", len(playback)),
+		)
+
+		playback = append(playback[len(chunked.data):], chunked.data...)
 
 		s.Buffer.Store(&Buffer{
-			playback: append(playback, chunked.data...),
-			seg:      buf.seg + 1,
+			playback: playback,
+			seg:      seg,
 			t:        chunked.t,
 			length:   len(chunked.data),
 		})

@@ -141,7 +141,7 @@ func (s *Shout) Attach(st *Streamer) {
 		buf := s.Buffer.Load()
 		seg := buf.seg + 1
 
-		slog.Info(
+		slog.Debug(
 			"send chunk",
 			slog.Int("seg", seg),
 			slog.Int("chunk-length", len(chunked.data)),

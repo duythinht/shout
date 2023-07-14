@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"os"
 	"os/signal"
+	"sync/atomic"
 	"syscall"
+	"time"
 
 	"github.com/duythinht/shout/utube"
 	"github.com/go-chi/chi/v5"
@@ -17,6 +20,7 @@ import (
 	"github.com/duythinht/shout/shout"
 
 	"golang.org/x/exp/slog"
+	"golang.org/x/net/websocket"
 )
 
 func main() {
@@ -50,6 +54,30 @@ func main() {
 
 	mux.Get("/stream.mp3", shout.ServeHTTP)
 
+	var title atomic.Value
+
+	mux.Get("/now-playing", websocket.Handler(func(ws *websocket.Conn) {
+
+		var clientTitle string
+
+		for {
+			select {
+			case <-ws.Request().Context().Done():
+				return
+			case <-time.After(1 * time.Second):
+				currentTitle := title.Load().(string)
+				if clientTitle != currentTitle {
+					clientTitle = currentTitle
+					payload, _ := json.Marshal(map[string]string{
+						"title": currentTitle,
+					})
+					ws.Write(payload)
+				}
+			}
+		}
+
+	}).ServeHTTP)
+
 	mux.Post("/next", func(w http.ResponseWriter, r *http.Request) {
 		slog.Info("Song skip requested")
 		next <- struct{}{}
@@ -81,9 +109,8 @@ func main() {
 			continue
 		}
 
-		title := song.Video.Title
-
-		slog.Info("Now Playing", slog.String("link", link), slog.String("title", title))
+		slog.Info("Now Playing", slog.String("link", link), slog.String("title", song.Video.Title))
+		title.Store(song.Video.Title)
 
 		_, err = io.Copy(streamer, song)
 

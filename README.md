@@ -12,6 +12,14 @@
 go run cmd/music-station/main.go
 ```
 
+### Get title via websocket
+```
+const socket = new WebSocket("wss://radio.0x97a.com/now-playing");
+socket.addEventListener("message", (event) => {
+  console.log("Message from server ", event.data);
+});
+```
+
 ### Known issues
 
 * So much, but I don't know :)

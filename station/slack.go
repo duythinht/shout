@@ -69,45 +69,52 @@ func New(slackToken string, channelID string) (station *Station) {
 func (s Station) History(ctx context.Context) (playlist *Playlist, err error) {
 	playlist = NewPlaylist()
 
-	var (
-		cursor = ""
-		more   = true
-	)
+	cursor := s.history(ctx, playlist, "")
 
-	for more {
-		history, err := s.GetConversationHistoryContext(ctx, &slack.GetConversationHistoryParameters{
-			ChannelID: s.channelID,
-			Cursor:    cursor,
-		})
-
-		if err != nil {
-			return nil, fmt.Errorf("station history %w", err)
+	go func() {
+		for len(cursor) > 0 {
+			cursor = s.history(ctx, playlist, cursor)
 		}
+		slog.Info("History has been loaded", "total-song", playlist.Size())
+	}()
 
-		more = history.HasMore
-		cursor = history.ResponseMetaData.NextCursor
-
-		for _, msg := range history.Messages {
-			for _, line := range strings.Split(msg.Text, "\n") {
-				id, err := ExtractYoutubeID(line)
-				if err != nil {
-					if errors.Is(err, ErrNotYoutubeLink) {
-						continue
-					}
-					return nil, fmt.Errorf("station history, extract id %w", err)
-				}
-				playlist.Add(
-					fmt.Sprintf(
-						"https://www.youtube.com/watch?v=%s",
-						id,
-					),
-				)
-			}
-
-		}
-
-	}
 	return playlist, nil
+}
+
+func (s *Station) history(ctx context.Context, playlist *Playlist, cursor string) string {
+	history, err := s.GetConversationHistoryContext(ctx, &slack.GetConversationHistoryParameters{
+		ChannelID: s.channelID,
+		Cursor:    cursor,
+	})
+
+	if err != nil {
+		slog.Warn("station history", "error", err)
+		return ""
+	}
+
+	for _, msg := range history.Messages {
+		for _, line := range strings.Split(msg.Text, "\n") {
+			id, err := ExtractYoutubeID(line)
+			if err != nil {
+				if errors.Is(err, ErrNotYoutubeLink) {
+					continue
+				}
+				slog.Warn("station history, extract id", "error", err)
+				return ""
+			}
+			playlist.Add(
+				fmt.Sprintf(
+					"https://www.youtube.com/watch?v=%s",
+					id,
+				),
+			)
+		}
+	}
+
+	if history.HasMore {
+		return history.ResponseMetaData.NextCursor
+	}
+	return ""
 }
 
 func (s *Station) SetNowPlaying(title string) error {

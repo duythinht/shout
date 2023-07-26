@@ -46,13 +46,11 @@ func main() {
 	qcheck(err)
 
 	youtube := utube.New("./songs/")
-	streamer := shout.OpenStream()
 
 	shout := shout.New()
 	defer shout.Close()
 
-	go streamer.Stream(ctx, next)
-	go shout.Attach(streamer)
+	go shout.Streaming(ctx, next)
 
 	mux := chi.NewMux()
 
@@ -151,7 +149,7 @@ func main() {
 
 		title.Store(song.Video.Title)
 
-		_, err = io.Copy(streamer, song)
+		_, err = io.Copy(shout, song)
 
 		if err != nil && !errors.Is(err, io.EOF) {
 			qcheck(err)

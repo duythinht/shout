@@ -1,6 +1,7 @@
 package shout
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -14,19 +15,19 @@ const (
 )
 
 type Shout struct {
-	//*Buffer //buffer, for reserve data
+	*stream
 	Buffer *atomic.Pointer[Buffer]
-	init   bool
 }
 
 func New() *Shout {
 
 	buf := &atomic.Pointer[Buffer]{}
 	buf.Store(&Buffer{})
+	s := streamMP3()
 
 	return &Shout{
+		stream: s,
 		Buffer: buf,
-		init:   false,
 	}
 }
 
@@ -100,7 +101,9 @@ func (s *Shout) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 // Attach to a streamer
-func (s *Shout) Attach(st *Streamer) {
+func (s *Shout) Streaming(ctx context.Context, next <-chan struct{}) {
+
+	go s.run(ctx, next)
 
 	var (
 		playback []byte
@@ -111,7 +114,7 @@ func (s *Shout) Attach(st *Streamer) {
 	t := time.Duration(0)
 
 	for t < BufferLength {
-		chunked = st.NextChunk()
+		chunked = s.NextChunk()
 		if !chunked.timeout {
 			playback = append(playback, chunked.data...)
 			t += chunked.t
@@ -136,7 +139,7 @@ func (s *Shout) Attach(st *Streamer) {
 	// Then start stream
 
 	for {
-		chunked := st.NextChunk()
+		chunked := s.NextChunk()
 
 		buf := s.Buffer.Load()
 		seg := buf.seg + 1

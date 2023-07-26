@@ -18,32 +18,32 @@ type Chunk struct {
 	timeout bool
 }
 
-type Streamer struct {
+type stream struct {
 	_chunk chan *Chunk
 	r      *io.PipeReader
 	w      *io.PipeWriter
 }
 
-func OpenStream() *Streamer {
+func streamMP3() *stream {
 
 	r, w := io.Pipe()
 
-	return &Streamer{
+	return &stream{
 		_chunk: make(chan *Chunk),
 		r:      r,
 		w:      w,
 	}
 }
 
-func (s *Streamer) Write(data []byte) (int, error) {
+func (s *stream) Write(data []byte) (int, error) {
 	return s.w.Write(data)
 }
 
-func (s *Streamer) Read(p []byte) (n int, err error) {
+func (s *stream) Read(p []byte) (n int, err error) {
 	return s.r.Read(p)
 }
 
-func (s *Streamer) Stream(ctx context.Context, next chan struct{}) {
+func (s *stream) run(ctx context.Context, next <-chan struct{}) {
 	for {
 		// handle next
 		select {
@@ -82,7 +82,7 @@ func (s *Streamer) Stream(ctx context.Context, next chan struct{}) {
 	}
 }
 
-func (s *Streamer) NextChunk() *Chunk {
+func (s *stream) NextChunk() *Chunk {
 	select {
 	case chunked := <-s._chunk:
 		return chunked

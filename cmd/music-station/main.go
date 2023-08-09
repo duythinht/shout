@@ -62,11 +62,14 @@ func main() {
 
 		var clientTitle string
 
+		one := time.Tick(1 * time.Second)
+		fiffteen := time.Tick(15 * time.Second)
+
 		for {
 			select {
 			case <-ws.Request().Context().Done():
 				return
-			case <-time.After(1 * time.Second):
+			case <-one:
 				currentTitle := title.Load().(string)
 				if clientTitle != currentTitle {
 					clientTitle = currentTitle
@@ -76,6 +79,8 @@ func main() {
 
 					ws.Write(payload)
 				}
+			case <-fiffteen:
+				ws.Write([]byte{'\n'})
 			}
 		}
 

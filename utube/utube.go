@@ -37,6 +37,11 @@ type Song struct {
 	Video *youtube.Video
 }
 
+func (s *Song) Close() error {
+	defer os.Remove(s.File.Name())
+	return s.File.Close()
+}
+
 func New(songDirectory string) *Client {
 	proxyFunc := httpproxy.FromEnvironment().ProxyFunc()
 	httpTransport := &http.Transport{

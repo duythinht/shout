@@ -38,6 +38,7 @@ type Song struct {
 }
 
 func (s *Song) Close() error {
+	slog.Info("close song, remove file", "name", s.File.Name())
 	defer os.Remove(s.File.Name())
 	return s.File.Close()
 }

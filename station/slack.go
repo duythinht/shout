@@ -36,7 +36,7 @@ func ExtractYoutubeID(message string) (id string, err error) {
 				return sub[4], nil
 			}
 
-			// otherwise, assume link is youtube.com, take the id from ?v=... and check the len
+			// otherwise, assume link is YouTube.com, take the id from ?v=... and check the len
 
 			if len(sub[3]) > 0 {
 				return sub[3], nil
@@ -44,7 +44,7 @@ func ExtractYoutubeID(message string) (id string, err error) {
 		}
 	}
 
-	// otherwise assume that not a valid youtube link
+	// otherwise assume that not a valid YouTube link
 	return "", fmt.Errorf("%s %w", message, ErrNotYoutubeLink)
 }
 
@@ -66,7 +66,7 @@ func New(slackToken string, channelID string) (station *Station) {
 	}
 }
 
-func (s Station) History(ctx context.Context) (playlist *Playlist, err error) {
+func (s *Station) History(ctx context.Context) (playlist *Playlist, err error) {
 	playlist = NewPlaylist()
 
 	cursor := s.history(ctx, playlist, "")
@@ -117,7 +117,7 @@ func (s *Station) history(ctx context.Context, playlist *Playlist, cursor string
 	return ""
 }
 
-func (s *Station) SetNowPlaying(title string) error {
+func (s *Station) SetBookmark(title string) error {
 	if s.bookmarkID == "" {
 		id, err := s.lookupBookmark()
 		if err != nil {
@@ -232,8 +232,36 @@ func (s *Station) Watch(ctx context.Context) (playlist *Playlist, err error) {
 	return playlist, nil
 }
 
-func (s *Station) Welcome(ctx context.Context) (func(), error) {
+func (s *Station) OnAir() (func(ctx context.Context, title string, youtubeUrl string), func()) {
+	var _ts string
 
+	stop := func() {
+		_, _, err := s.DeleteMessage(s.channelID, _ts)
+
+		if err != nil {
+			slog.Warn("delete on-air", slog.String("error", err.Error()))
+		}
+	}
+
+	onAir := func(ctx context.Context, title string, youtubeUrl string) {
+
+		stop()
+
+		_, ts, _, err := s.SendMessageContext(
+			ctx,
+			s.channelID,
+			slack.MsgOptionBlocks(onAirBlocks(title, youtubeUrl).BlockSet...),
+		)
+		if err != nil {
+			slog.Error("set on-air", err)
+		}
+		_ts = ts
+	}
+
+	return onAir, stop
+}
+
+func onAirBlocks(songTitle string, youtubeURL string) slack.Blocks {
 	title := slack.NewSectionBlock(
 		slack.NewTextBlockObject("mrkdwn", "*The Station is On-Air*", false, false),
 		nil, nil,
@@ -241,6 +269,7 @@ func (s *Station) Welcome(ctx context.Context) (func(), error) {
 
 	text := bytes.NewBuffer(nil)
 
+	fmt.Fprintf(text, "*Now Playing:*\n%s\n", songTitle)
 	fmt.Fprintf(text, "*Stream:*\n%s\n", streamLink)
 	fmt.Fprintf(text, "*Queuing:*\n%s\n", listLink)
 
@@ -257,17 +286,5 @@ func (s *Station) Welcome(ctx context.Context) (func(), error) {
 		content,
 		slack.NewDividerBlock(),
 	)
-
-	_, ts, _, err := s.SendMessageContext(ctx, s.channelID, slack.MsgOptionBlocks(msg.Blocks.BlockSet...))
-	if err != nil {
-		return nil, fmt.Errorf("welcome send fail %w", err)
-	}
-
-	return func() {
-		_, _, err := s.DeleteMessage(s.channelID, ts)
-
-		if err != nil {
-			slog.Warn("delete welcome", slog.String("error", err.Error()))
-		}
-	}, nil
+	return msg.Blocks
 }

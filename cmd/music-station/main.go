@@ -37,24 +37,24 @@ func main() {
 
 	channelID := "C0UQ8TKLJ"
 
-	station := station.New(token, channelID)
+	st := station.New(token, channelID)
 
-	playlist, err := station.History(ctx)
+	playlist, err := st.History(ctx)
 	qcheck(err)
 
-	queue, err := station.Watch(ctx)
+	queue, err := st.Watch(ctx)
 	qcheck(err)
 
 	youtube := utube.New("./songs/")
 
-	shout := shout.New()
-	defer shout.Close()
+	sh := shout.New()
+	defer sh.Close()
 
-	go shout.Streaming(ctx, next)
+	go sh.Streaming(ctx, next)
 
 	mux := chi.NewMux()
 
-	mux.Get("/stream.mp3", shout.ServeHTTP)
+	mux.Get("/stream.mp3", sh.ServeHTTP)
 
 	var title atomic.Value
 
@@ -63,7 +63,7 @@ func main() {
 		var clientTitle string
 
 		one := time.Tick(1 * time.Second)
-		fiffteen := time.Tick(15 * time.Second)
+		fifteen := time.Tick(15 * time.Second)
 
 		for {
 			select {
@@ -79,8 +79,8 @@ func main() {
 
 					ws.Write(payload)
 				}
-			case <-fiffteen:
-				ws.Write([]byte{'\n'})
+			case <-fifteen:
+				_, _ = ws.Write([]byte{'\n'})
 			}
 		}
 
@@ -114,15 +114,14 @@ func main() {
 		qcheck(err)
 	}()
 
-	stopStation, err := station.Welcome(ctx)
-	qcheck(err)
+	onAir, stop := st.OnAir()
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
 
 	go func() {
 		<-c
-		stopStation()
+		stop()
 		os.Exit(0)
 	}()
 
@@ -135,38 +134,43 @@ func main() {
 			link = queue.Poll()
 			playlist.Add(link)
 		} else {
-			// play suffle if don't have any music in queue
+			// play shuffle if shout don't have any music in queue
 			link = playlist.Shuffle()
 		}
 
 		song, err := youtube.GetSong(ctx, link)
 
 		if err != nil {
-			// skip this song if get some error
+			// skip this song if ytb get some error
 			slog.Warn("get song", slog.String("error", err.Error()))
 			continue
 		}
 
 		slog.Info("Now Playing", slog.String("link", link), slog.String("title", song.Video.Title))
 
-		err = station.SetNowPlaying(song.Video.Title)
+		err = st.SetBookmark(song.Video.Title)
 		qcheck(err)
+
+		onAir(ctx, song.Video.Title, link)
 
 		title.Store(song.Video.Title)
 
-		_, err = io.Copy(shout, song)
+		_, err = io.Copy(sh, song)
 
 		if err != nil && !errors.Is(err, io.EOF) {
 			qcheck(err)
 		}
 
-		song.Close()
+		if err := song.Close(); err != nil {
+			return
+		}
 	}
 }
 
+// qcheck to support quick check and exit
 func qcheck(err error) {
 	if err != nil {
-		slog.Error("station", slog.String("error", err.Error()))
+		slog.Error("station", err)
 		os.Exit(1)
 	}
 }

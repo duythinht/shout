@@ -43,14 +43,15 @@ func main() {
 
 	youtube := utube.New("./songs/")
 
-	shout := shout.New()
-	defer shout.Close()
+	s := shout.New()
 
-	go shout.Streaming(ctx, next)
+	defer s.Close()
+
+	go s.Streaming(ctx, next)
 
 	mux := chi.NewMux()
 
-	mux.Get("/stream.mp3", shout.ServeHTTP)
+	mux.Get("/stream.mp3", s.ServeHTTP)
 
 	var title atomic.Value
 
@@ -69,7 +70,7 @@ func main() {
 					payload, _ := json.Marshal(map[string]string{
 						"title": currentTitle,
 					})
-					ws.Write(payload)
+					_, _ = ws.Write(payload)
 				}
 			}
 		}
@@ -110,13 +111,13 @@ func main() {
 		slog.Info("Now Playing", slog.String("link", link), slog.String("title", song.Video.Title))
 		title.Store(song.Video.Title)
 
-		_, err = io.Copy(shout, song)
+		_, err = io.Copy(s, song)
 
 		if err != nil && !errors.Is(err, io.EOF) {
 			qcheck(err)
 		}
 
-		song.Close()
+		_ = song.Close()
 	}
 }
 

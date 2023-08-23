@@ -245,17 +245,31 @@ func (s *Station) OnAir() (func(ctx context.Context, title string, youtubeUrl st
 
 	onAir := func(ctx context.Context, title string, youtubeUrl string) {
 
-		stop()
+		//stop()
 
-		_, ts, _, err := s.SendMessageContext(
-			ctx,
-			s.channelID,
-			slack.MsgOptionBlocks(onAirBlocks(title, youtubeUrl).BlockSet...),
-		)
-		if err != nil {
-			slog.Error("set on-air", err)
+		if _ts == "" {
+			_, ts, _, err := s.SendMessageContext(
+				ctx,
+				s.channelID,
+				slack.MsgOptionBlocks(onAirBlocks(title, youtubeUrl).BlockSet...),
+			)
+			if err != nil {
+				slog.Error("init on-air", err)
+			}
+			_ts = ts
+		} else {
+			_, ts, _, err := s.UpdateMessageContext(
+				ctx,
+				s.channelID,
+				_ts,
+				slack.MsgOptionBlocks(onAirBlocks(title, youtubeUrl).BlockSet...),
+			)
+			if err != nil {
+				slog.Error("set on-air", err)
+			}
+			_ts = ts
 		}
-		_ts = ts
+
 	}
 
 	return onAir, stop

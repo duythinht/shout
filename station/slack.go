@@ -17,6 +17,7 @@ var (
 	rx = regexp.MustCompile(`https://(.+.youtube.com|youtu.be)/(watch\?v=([^&^>^|]+)|([^&^>^|]+))`)
 
 	//hardcode stream link, move to config later
+	homeLink       = "https://radio.0x97a.com/"
 	streamLink     = "https://radio.0x97a.com/stream.mp3"
 	listLink       = "https://radio.0x97a.com/list.txt"
 	welcomeImagURL = "https://raw.githubusercontent.com/duythinht/shout/master/static/radio-on-air.png"
@@ -284,6 +285,7 @@ func onAirBlocks(songTitle string, youtubeURL string) slack.Blocks {
 	text := bytes.NewBuffer(nil)
 
 	fmt.Fprintf(text, "*Now Playing:*\n%s\n", songTitle)
+	fmt.Fprintf(text, "*Listen:*\n%s\n", homeLink)
 	fmt.Fprintf(text, "*Stream:*\n%s\n", streamLink)
 	fmt.Fprintf(text, "*Queuing:*\n%s\n", listLink)
 

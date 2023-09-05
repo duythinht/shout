@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/duythinht/shout/utube"
+	"github.com/duythinht/shout/web"
 	"github.com/go-chi/chi/v5"
 
 	"github.com/duythinht/shout/station"
@@ -23,6 +24,8 @@ import (
 	"golang.org/x/exp/slog"
 	"golang.org/x/net/websocket"
 )
+
+//
 
 func main() {
 	token := os.Getenv("SLACK_TOKEN")
@@ -54,6 +57,7 @@ func main() {
 
 	mux := chi.NewMux()
 
+	mux.Get("/", web.ServeIndex)
 	mux.Get("/stream.mp3", sh.ServeHTTP)
 
 	var title atomic.Value

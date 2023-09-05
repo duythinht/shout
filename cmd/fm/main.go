@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/duythinht/shout/utube"
+	"github.com/duythinht/shout/web"
 	"github.com/go-chi/chi/v5"
 
 	"github.com/duythinht/shout/station"
@@ -51,6 +52,7 @@ func main() {
 
 	mux := chi.NewMux()
 
+	mux.Get("/", web.ServeIndex)
 	mux.Get("/stream.mp3", s.ServeHTTP)
 
 	var title atomic.Value

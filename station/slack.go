@@ -285,8 +285,7 @@ func onAirBlocks(songTitle string, youtubeURL string) slack.Blocks {
 	text := bytes.NewBuffer(nil)
 
 	fmt.Fprintf(text, "*Now Playing:*\n%s\n", songTitle)
-	fmt.Fprintf(text, "*Listen:*\n%s\n", homeLink)
-	fmt.Fprintf(text, "*Stream:*\n%s\n", streamLink)
+	fmt.Fprintf(text, "*Stream:*\n%s\n", homeLink)
 	fmt.Fprintf(text, "*Queuing:*\n%s\n", listLink)
 
 	content := slack.NewSectionBlock(

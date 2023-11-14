@@ -18,7 +18,7 @@ var (
 
 	//hardcode stream link, move to config later
 	homeLink       = "https://radio.0x97a.com/"
-	streamLink     = "https://radio.0x97a.com/stream.mp3"
+	streamLink     = "https://radio.0x97a.com/"
 	listLink       = "https://radio.0x97a.com/list.txt"
 	welcomeImagURL = "https://raw.githubusercontent.com/duythinht/shout/master/static/radio-on-air.png"
 

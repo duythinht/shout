@@ -2,8 +2,6 @@ module github.com/duythinht/shout
 
 go 1.21
 
-toolchain go1.21.7
-
 require (
 	github.com/kkdai/youtube/v2 v2.8.3
 	github.com/slack-go/slack v0.12.2

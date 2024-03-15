@@ -2,12 +2,30 @@ package web
 
 import (
 	_ "embed"
+	"fmt"
 	"net/http"
 )
 
 //go:embed index.html
 var index []byte
 
-func ServeIndex(w http.ResponseWriter, _ *http.Request) {
-	w.Write(index)
+//go:embed css/main.css
+var css []byte
+
+//go:embed scripts/script.js
+var script []byte
+
+func Handler(w http.ResponseWriter, r *http.Request) {
+	fmt.Printf("`%s`\n", r.URL.Path)
+	switch r.URL.Path {
+	case "/css/main.css":
+		w.Header().Set("Content-Type", "text/css")
+		w.Write(css)
+	case "/scripts/script.js":
+		w.Header().Set("Content-Type", "text/javascript")
+		w.Write(script)
+	default:
+		w.Header().Set("Content-Type", "text/html")
+		w.Write(index)
+	}
 }

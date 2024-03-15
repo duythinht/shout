@@ -57,7 +57,7 @@ func main() {
 
 	mux := chi.NewMux()
 
-	mux.Get("/", web.ServeIndex)
+	mux.Get("/*", web.Handler)
 	mux.Get("/stream.mp3", sh.ServeHTTP)
 
 	var title atomic.Value

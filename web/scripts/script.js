@@ -12,7 +12,7 @@ new Vue({
           {
             name: "...",
             artist: "Radio Station",
-            cover: "https://raw.githubusercontent.com/duythinht/shout/master/static/radio-on-air.png",
+            cover: "https://raw.githubusercontent.com/duythinht/shout/master/static/radio-girl.png",
             source: "https://radio.0x97a.com/stream.mp3",
             url: "https://github.com/duythinht/shout",
             favorited: false

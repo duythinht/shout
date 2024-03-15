@@ -2,7 +2,6 @@ package web
 
 import (
 	_ "embed"
-	"fmt"
 	"net/http"
 )
 
@@ -16,7 +15,7 @@ var css []byte
 var script []byte
 
 func Handler(w http.ResponseWriter, r *http.Request) {
-	fmt.Printf("`%s`\n", r.URL.Path)
+	w.Header().Set("Cache-Control", "public, max-age=604800, immutable")
 	switch r.URL.Path {
 	case "/css/main.css":
 		w.Header().Set("Content-Type", "text/css")

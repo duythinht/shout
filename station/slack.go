@@ -72,12 +72,10 @@ func (s *Station) History(ctx context.Context) (playlist *Playlist, err error) {
 
 	cursor := s.history(ctx, playlist, "")
 
-	go func() {
-		for len(cursor) > 0 {
-			cursor = s.history(ctx, playlist, cursor)
-		}
-		slog.Info("History has been loaded", "total-song", playlist.Size())
-	}()
+	for len(cursor) > 0 {
+		cursor = s.history(ctx, playlist, cursor)
+	}
+	slog.Info("History has been loaded", "total-song", playlist.Size())
 
 	return playlist, nil
 }
@@ -94,6 +92,14 @@ func (s *Station) history(ctx context.Context, playlist *Playlist, cursor string
 	}
 
 	for _, msg := range history.Messages {
+
+		if msg.User == "U05G9DK00QG" {
+			_, _, err := s.DeleteMessage(s.channelID, msg.Timestamp)
+			if err != nil {
+				slog.Warn("delete on-air", slog.String("error", err.Error()))
+			}
+		}
+
 		for _, line := range strings.Split(msg.Text, "\n") {
 			id, err := ExtractYoutubeID(line)
 			if err != nil {
